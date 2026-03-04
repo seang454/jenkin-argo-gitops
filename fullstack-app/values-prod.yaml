@@ -1,0 +1,68 @@
+# Production environment overrides
+global:
+  database:
+    host: "fullstack-app-database"
+    name: "appdb_prod"
+
+frontend:
+  replicaCount: 3
+  image:
+    tag: "stable"
+  ingress:
+    hosts:
+      - host: app.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: app-tls
+        hosts:
+          - app.example.com
+  hpa:
+    minReplicas: 3
+    maxReplicas: 20
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    REACT_APP_API_URL: "https://app.example.com/api"
+
+backend:
+  replicaCount: 3
+  image:
+    tag: "stable"
+  ingress:
+    hosts:
+      - host: app.example.com
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: Prefix
+    tls:
+      - secretName: app-tls
+        hosts:
+          - app.example.com
+  hpa:
+    minReplicas: 3
+    maxReplicas: 20
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+  env:
+    NODE_ENV: "production"
+    PORT: "8080"
+
+database:
+  auth:
+    existingSecret: "postgres-prod-secret"
+    database: "appdb_prod"
+  persistence:
+    size: 50Gi
+    storageClass: "premium-rwo"

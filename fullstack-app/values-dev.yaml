@@ -1,0 +1,43 @@
+# Development environment overrides
+global:
+  database:
+    host: "fullstack-app-database"
+    name: "appdb_dev"
+
+frontend:
+  replicaCount: 1
+  image:
+    tag: "dev"
+  ingress:
+    hosts:
+      - host: dev.app.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+  hpa:
+    enabled: false
+  env:
+    REACT_APP_API_URL: "http://dev.app.example.com/api"
+
+backend:
+  replicaCount: 1
+  image:
+    tag: "dev"
+  ingress:
+    hosts:
+      - host: dev.app.example.com
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: Prefix
+  hpa:
+    enabled: false
+  env:
+    NODE_ENV: "development"
+    PORT: "8080"
+
+database:
+  auth:
+    password: "devpassword"
+    database: "appdb_dev"
+  persistence:
+    size: 2Gi

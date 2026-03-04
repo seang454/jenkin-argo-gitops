@@ -1,0 +1,151 @@
+# Global values shared across all subcharts
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  # Database connection info shared with backend
+  database:
+    host: "fullstack-app-database"
+    port: 5432
+    name: "appdb"
+
+# ──────────────────────────────────────────
+# Frontend subchart values
+# ──────────────────────────────────────────
+frontend:
+  enabled: true
+
+  replicaCount: 2
+
+  image:
+    repository: my-org/frontend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: app.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  env:
+    REACT_APP_API_URL: "http://app.example.com/api"
+
+  serviceAccount:
+    create: false
+    name: ""
+
+# ──────────────────────────────────────────
+# Backend subchart values
+# ──────────────────────────────────────────
+backend:
+  enabled: true
+
+  replicaCount: 2
+
+  image:
+    repository: my-org/backend
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+    hosts:
+      - host: app.example.com
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: Prefix
+    tls: []
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  env:
+    NODE_ENV: "production"
+    PORT: "8080"
+
+  serviceAccount:
+    create: false
+    name: ""
+
+# ──────────────────────────────────────────
+# Database subchart values
+# ──────────────────────────────────────────
+database:
+  enabled: true
+
+  image:
+    repository: postgres
+    pullPolicy: IfNotPresent
+    tag: "15-alpine"
+
+  service:
+    type: ClusterIP
+    port: 5432
+
+  auth:
+    username: "appuser"
+    password: "changeme"
+    database: "appdb"
+    # Reference an existing secret instead of creating one:
+    existingSecret: ""
+    secretKeys:
+      userPasswordKey: postgres-password
+
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

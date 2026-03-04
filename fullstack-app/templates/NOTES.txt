@@ -1,0 +1,21 @@
+🚀 fullstack-app has been deployed!
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+Components deployed:
+{{- if .Values.frontend.enabled }}
+  ✅ Frontend  → http://{{ (index .Values.frontend.ingress.hosts 0).host }}
+{{- end }}
+{{- if .Values.backend.enabled }}
+  ✅ Backend   → http://{{ (index .Values.backend.ingress.hosts 0).host }}/api
+{{- end }}
+{{- if .Values.database.enabled }}
+  ✅ Database  → {{ .Values.global.database.host }}:{{ .Values.global.database.port }}
+{{- end }}
+
+To check pod status:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+To view logs:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }} -f
