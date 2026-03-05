@@ -1,23 +1,29 @@
-# Production environment overrides
+# =============================================================================
+# Production Environment Overrides
+# Usage: helm install fullstack-app . -f values.yaml -f values-prod.yaml
+# =============================================================================
+
+# ── Global ─────────────────────────────────────────
 global:
   database:
     host: "fullstack-app-database"
     name: "appdb_prod"
 
+# ── Frontend ───────────────────────────────────────
 frontend:
   replicaCount: 3
   image:
     tag: "stable"
   ingress:
     hosts:
-      - host: app.example.com
+      - host: frontend.seang.shop
         paths:
           - path: /
             pathType: Prefix
     tls:
-      - secretName: app-tls
+      - secretName: frontend-tls
         hosts:
-          - app.example.com
+          - frontend.seang.shop
   hpa:
     minReplicas: 3
     maxReplicas: 20
@@ -29,22 +35,23 @@ frontend:
       cpu: 500m
       memory: 512Mi
   env:
-    REACT_APP_API_URL: "https://app.example.com/api"
+    REACT_APP_API_URL: "https://frontend.seang.shop/api"
 
+# ── Backend ────────────────────────────────────────
 backend:
   replicaCount: 3
   image:
     tag: "stable"
   ingress:
     hosts:
-      - host: app.example.com
+      - host: backend.seang.shop
         paths:
           - path: /api(/|$)(.*)
             pathType: Prefix
     tls:
-      - secretName: app-tls
+      - secretName: backend-tls
         hosts:
-          - app.example.com
+          - backend.seang.shop
   hpa:
     minReplicas: 3
     maxReplicas: 20
@@ -59,6 +66,7 @@ backend:
     NODE_ENV: "production"
     PORT: "8080"
 
+# ── Database ───────────────────────────────────────
 database:
   auth:
     existingSecret: "postgres-prod-secret"
@@ -66,3 +74,80 @@ database:
   persistence:
     size: 50Gi
     storageClass: "premium-rwo"
+
+# ── Keycloak subchart ──────────────────────────────
+keycloak:
+  replicaCount: 3
+
+  keycloak:
+    production: true
+    proxy: edge
+    hostname: "keycloak.seang.shop"
+    hostnameStrict: true
+    hostnameStrictHttps: true
+    auth:
+      adminUser: admin
+      adminPassword: ""                      # ignored — existingSecret is used
+      existingSecret: "keycloak-admin-secret"
+      existingSecretKey: "admin-password"
+
+  database:
+    vendor: postgres
+    host: "fullstack-app-database"           # consistent with global.database.host
+    port: 5432
+    name: "keycloak"
+    username: "keycloak"
+    password: ""                             # ignored — existingSecret is used
+    existingSecret: "keycloak-db-secret"
+    existingSecretKey: "db-password"
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    hosts:
+      - host: "keycloak.seang.shop"          # matches keycloak.hostname above
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: "keycloak-tls"
+        hosts:
+          - "keycloak.seang.shop"            # matches keycloak.hostname above
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+          topologyKey: kubernetes.io/hostname
+
+  cache:
+    stack: jdbc-ping
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s

@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "keycloak.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "keycloak.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "keycloak.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "keycloak.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "keycloak.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.initContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: keycloak
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ include "keycloak.imageTag" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - start
+            {{- if not .Values.keycloak.production }}
+            - --optimized
+            {{- end }}
+            {{- range .Values.keycloak.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "keycloak.fullname" . }}-config
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: {{ .Values.keycloak.auth.adminUser | quote }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "keycloak.adminSecretName" . }}
+                  key: {{ .Values.keycloak.auth.existingSecretKey | default "admin-password" }}
+            {{- if ne .Values.database.vendor "dev-file" }}
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "keycloak.dbSecretName" . }}
+                  key: {{ .Values.database.existingSecretKey | default "db-password" }}
+            {{- end }}
+            {{- with .Values.keycloak.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: management
+              containerPort: 9000
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: keycloak-data
+              mountPath: /opt/keycloak/data
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- else if .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: keycloak-data
+          persistentVolumeClaim:
+            claimName: {{ include "keycloak.fullname" . }}-data
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- else if .Values.extraVolumes }}
+      volumes:
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

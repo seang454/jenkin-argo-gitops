@@ -52,8 +52,28 @@ fullstack-app/
 ## Usage
 
 ### Build dependencies
+- It reads your Chart.yaml dependencies and packages all subcharts into the charts/ folder so Helm can use them.
 ```bash
 helm dependency build ./fullstack-app
+
+Before running it:
+fullstack-app/
+├── Chart.yaml          ← lists dependencies
+├── charts/             ← EMPTY or missing subchart packages
+│   ├── frontend/
+│   ├── backend/
+│   ├── database/
+│   └── keycloak/
+
+After running it:
+fullstack-app/
+├── Chart.yaml
+├── Chart.lock          ← created automatically (locks versions)
+├── charts/
+│   ├── frontend-1.0.0.tgz    ← packaged ✅
+│   ├── backend-1.0.0.tgz     ← packaged ✅
+│   ├── database-1.0.0.tgz    ← packaged ✅
+│   └── keycloak-1.0.0.tgz    ← packaged ✅
 ```
 
 ### Install (dev)

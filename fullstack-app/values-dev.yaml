@@ -1,16 +1,22 @@
-# Development environment overrides
+# =============================================================================
+# Development Environment Overrides
+# Usage: helm install fullstack-app . -f values.yaml -f values-dev.yaml
+# =============================================================================
+
+# ── Global ─────────────────────────────────────────
 global:
   database:
     host: "fullstack-app-database"
     name: "appdb_dev"
 
+# ── Frontend ───────────────────────────────────────
 frontend:
   replicaCount: 1
   image:
     tag: "dev"
   ingress:
     hosts:
-      - host: dev.app.example.com
+      - host: "dev.app.example.com"
         paths:
           - path: /
             pathType: Prefix
@@ -19,13 +25,14 @@ frontend:
   env:
     REACT_APP_API_URL: "http://dev.app.example.com/api"
 
+# ── Backend ────────────────────────────────────────
 backend:
   replicaCount: 1
   image:
     tag: "dev"
   ingress:
     hosts:
-      - host: dev.app.example.com
+      - host: "dev.app.example.com"
         paths:
           - path: /api(/|$)(.*)
             pathType: Prefix
@@ -35,9 +42,76 @@ backend:
     NODE_ENV: "development"
     PORT: "8080"
 
+# ── Database ───────────────────────────────────────
 database:
   auth:
     password: "devpassword"
     database: "appdb_dev"
   persistence:
     size: 2Gi
+
+# ── Keycloak subchart ──────────────────────────────
+keycloak:
+  replicaCount: 1
+
+  keycloak:
+    production: false
+    proxy: edge
+    hostname: "keycloak.dev.seang.shop"
+    hostnameStrict: false
+    hostnameStrictHttps: false
+    auth:
+      adminUser: admin
+      adminPassword: "changeme"            # plaintext OK in dev
+      existingSecret: ""
+      existingSecretKey: "admin-password"
+    extraEnv:
+      - name: KC_LOG_LEVEL
+        value: "DEBUG"                     # verbose logging in dev
+
+  database:
+    vendor: postgres
+    host: "fullstack-app-database"
+    port: 5432
+    name: "keycloak"
+    username: "keycloak"
+    password: "changeme"                   # plaintext OK in dev
+    existingSecret: ""
+    existingSecretKey: "db-password"
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: "keycloak.dev.seang.shop"    # matches keycloak.hostname above
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []                                # no TLS in dev
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  autoscaling:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+
+  startupProbe:
+    httpGet:
+      path: /health/started
+      port: 9000
+    initialDelaySeconds: 15               # faster than default (30s)
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 20                  # less than default (30)
+
+  metrics:
+    enabled: false

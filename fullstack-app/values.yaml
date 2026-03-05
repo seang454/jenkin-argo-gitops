@@ -1,8 +1,9 @@
 # Global values shared across all subcharts
 global:
+
   imageRegistry: ""
-  imagePullSecrets: []
-  storageClass: ""
+  imagePullSecrets: [] # Tells Kubernetes which secret to use to authenticate when pulling images from a private registry.
+  storageClass: "" # Tells Kubernetes what type of disk to use for PersistentVolumeClaims across all subcharts.
   # Database connection info shared with backend
   database:
     host: "fullstack-app-database"
@@ -18,9 +19,9 @@ frontend:
   replicaCount: 2
 
   image:
-    repository: my-org/frontend
+    repository: seang454/jenkins-itp-nextjs
     pullPolicy: IfNotPresent
-    tag: "latest"
+    tag: "979e84b"
 
   service:
     type: ClusterIP
@@ -32,7 +33,55 @@ frontend:
     className: "nginx"
     annotations: {}
     hosts:
-      - host: app.example.com
+      - host: frontend.seang.shop
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  env:
+    REACT_APP_API_URL: "http://app.example.com/api"
+
+  serviceAccount:
+    create: false
+    name: ""
+
+
+admin:
+  enabled: true
+
+  replicaCount: 2
+
+  image:
+    repository: seang454/jenkins-admin-nextjs
+    pullPolicy: IfNotPresent
+    tag: "b1e2ecc"
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: admin.seang.shop
         paths:
           - path: /
             pathType: Prefix
@@ -68,9 +117,9 @@ backend:
   replicaCount: 2
 
   image:
-    repository: my-org/backend
+    repository: seang454/jenkins-itp-spring
     pullPolicy: IfNotPresent
-    tag: "latest"
+    tag: "63a7930"
 
   service:
     type: ClusterIP
@@ -83,7 +132,7 @@ backend:
     annotations:
       nginx.ingress.kubernetes.io/rewrite-target: /$2
     hosts:
-      - host: app.example.com
+      - host: backend.seang.shop
         paths:
           - path: /api(/|$)(.*)
             pathType: Prefix
@@ -149,3 +198,83 @@ database:
     limits:
       cpu: 500m
       memory: 512Mi
+
+# ──────────────────────────────────────────
+# Keycloak subchart values
+# All keys here map to charts/keycloak/values.yaml
+# ──────────────────────────────────────────
+keycloak:
+  enabled: true
+
+  replicaCount: 1
+
+  image:
+    repository: quay.io/keycloak/keycloak
+    pullPolicy: IfNotPresent
+    tag: ""                              # defaults to appVersion in Chart.yaml
+
+  keycloak:
+    auth:
+      adminUser: admin
+      adminPassword: "changeme"          # ⚠️ dev only — override with existingSecret in prod
+      existingSecret: ""
+      existingSecretKey: "admin-password"
+
+    hostname: ""                         # set per environment in values-dev/prod.yaml
+    hostnameStrict: false                # overridden to true in values-prod.yaml
+    hostnameStrictHttps: false           # overridden to true in values-prod.yaml
+    production: false                    # overridden to true in values-prod.yaml
+    proxy: edge
+    httpRelativePath: "/"
+
+  database:
+    vendor: postgres
+    host: "fullstack-app-database"       # same DB server as the rest of the app
+    port: 5432
+    name: "keycloak"                     # separate DB from appdb
+    username: "keycloak"
+    password: "changeme"                 # ⚠️ dev only — override with existingSecret in prod
+    existingSecret: ""
+    existingSecretKey: "db-password"
+    schema: public
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  ingress:
+    enabled: false                       # enabled per environment in values-dev/prod.yaml
+    className: "nginx"
+    annotations: {}
+    hosts:
+      - host: ""                         # set per environment
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+  cache:
+    stack: jdbc-ping
+
+  metrics:
+    enabled: false
+    serviceMonitor:
+      enabled: false

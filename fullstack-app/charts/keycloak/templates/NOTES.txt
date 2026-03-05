@@ -1,0 +1,41 @@
+🔐 Keycloak has been deployed!
+
+============================================================
+  Release: {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+  Version: {{ include "keycloak.imageTag" . }}
+============================================================
+
+{{- if .Values.ingress.enabled }}
+🌐 Keycloak is accessible at:
+  {{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}{{ $.Values.keycloak.httpRelativePath }}
+  {{- end }}
+{{- else if eq .Values.service.type "LoadBalancer" }}
+⏳ It may take a few minutes for the LoadBalancer IP to be available:
+  kubectl get svc --namespace {{ .Release.Namespace }} {{ include "keycloak.fullname" . }} -w
+{{- else }}
+🔌 Access Keycloak via port-forward:
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "keycloak.fullname" . }} 8080:80
+
+  Then visit: http://127.0.0.1:8080{{ .Values.keycloak.httpRelativePath }}
+{{- end }}
+
+👤 Admin Credentials:
+  Username: {{ .Values.keycloak.auth.adminUser }}
+  Password: Run the following to retrieve:
+
+  kubectl get secret --namespace {{ .Release.Namespace }} {{ include "keycloak.adminSecretName" . }} \
+    -o jsonpath="{.data.admin-password}" | base64 --decode
+
+⚠️  Security Reminders:
+  - Change the admin password immediately in production
+  - Use existingSecret for passwords in production deployments
+  - Enable TLS via ingress.tls or KC_HTTPS_* env vars
+  - Set keycloak.production=true for production hardening
+
+📊 Health Endpoints (management port 9000):
+  /health/live    - Liveness check
+  /health/ready   - Readiness check
+  /health/started - Startup check
+  /metrics        - Prometheus metrics (if enabled)

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: admin
+description: admin subchart for the fullstack application
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
