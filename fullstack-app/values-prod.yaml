@@ -16,6 +16,8 @@ frontend:
   image:
     tag: "stable"
   ingress:
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"  # ← auto issue TLS cert
     hosts:
       - host: frontend.seang.shop
         paths:
@@ -36,7 +38,7 @@ frontend:
       cpu: 500m
       memory: 512Mi
   env:
-    REACT_APP_API_URL: "https://frontend.seang.shop/api"
+    REACT_APP_API_URL: "https://backend.seang.shop"   # ← fixed: points to backend not itself
 
 # ── Admin ──────────────────────────────────────────
 admin:
@@ -44,6 +46,8 @@ admin:
   image:
     tag: "stable"
   ingress:
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"  # ← auto issue TLS cert
     hosts:
       - host: admin.seang.shop
         paths:
@@ -72,6 +76,9 @@ backend:
   image:
     tag: "stable"
   ingress:
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"  # ← auto issue TLS cert
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
     hosts:
       - host: backend.seang.shop
         paths:
@@ -103,6 +110,11 @@ database:
   persistence:
     size: 50Gi
     storageClass: "premium-rwo"
+  initScript:
+    enabled: true
+    keycloakUser: "keycloak"
+    keycloakPassword: ""                        # ⚠️ must match password in keycloak-db-secret
+    keycloakDatabase: "keycloak"
 
 # ── Keycloak subchart ──────────────────────────────
 keycloak:
@@ -172,11 +184,27 @@ keycloak:
               app.kubernetes.io/name: keycloak
           topologyKey: kubernetes.io/hostname
 
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: 9000
+    initialDelaySeconds: 120            # longer for prod — not using --optimized
+    periodSeconds: 30
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 9000
+    initialDelaySeconds: 60             # longer for prod
+    periodSeconds: 10
+    failureThreshold: 3
+
   startupProbe:
     httpGet:
       path: /health/started
       port: 9000
-    initialDelaySeconds: 30             # longer startup time for prod
+    initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 30
@@ -189,4 +217,4 @@ keycloak:
     serviceMonitor:
       enabled: true
       interval: 30s
-      scrapeTimeout: 10s                # ← required by servicemonitor.yaml
+      scrapeTimeout: 10s

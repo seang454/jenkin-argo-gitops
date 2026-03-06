@@ -351,3 +351,19 @@ keycloak:
       enabled: false
       interval: 30s
       scrapeTimeout: 10s                 # ← required by servicemonitor.yaml
+
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: 9000
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 9000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 3

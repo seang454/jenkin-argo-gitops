@@ -21,6 +21,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "backend.serviceAccountName" . }}
+      {{- with .Values.initContainers }}    # ← ADD THIS
+      initContainers:                        # ← ADD THIS
+        {{- toYaml . | nindent 8 }}         # ← ADD THIS
+      {{- end }}                             # ← ADD THIS
       containers:
         - name: backend
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
