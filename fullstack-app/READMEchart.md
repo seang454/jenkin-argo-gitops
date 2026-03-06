@@ -116,3 +116,34 @@ metrics:
 ```bash
 helm upgrade keycloak ./keycloak -f values-production.yaml
 ```
+
+
+# we secrete
+
+```bash
+Dev:
+values.yaml
+database.auth.existingSecret = ""  (empty)
+       ↓
+database.createSecret = true
+       ↓
+secret.yaml template RUNS
+       ↓
+Secret auto-created from password: "changeme" ✅
+
+```
+
+```bash
+production
+values-prod.yaml
+database.auth.existingSecret = "postgres-prod-secret"  (not empty)
+       ↓
+database.createSecret = false
+       ↓
+secret.yaml template SKIPPED
+       ↓
+No secret created by Helm ✅
+You must create it manually before deploying
+
+```
+

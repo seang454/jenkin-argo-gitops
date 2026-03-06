@@ -8,7 +8,8 @@ global:
   database:
     host: "fullstack-app-database"
     port: 5432
-    name: "appdb"
+    name: "backend-db"
+    existingSecret: ""  # empty = auto-create secret from password below
 
 # ──────────────────────────────────────────
 # Frontend subchart values
@@ -29,7 +30,7 @@ frontend:
     targetPort: 3000
 
   ingress:
-    enabled: true
+    enabled: true        # ← required by ingress.yaml template
     className: "nginx"
     annotations: {}
     hosts:
@@ -54,13 +55,16 @@ frontend:
     targetCPUUtilizationPercentage: 70
 
   env:
-    REACT_APP_API_URL: "http://app.example.com/api"
+    REACT_APP_API_URL: "http://backend.seang.shop"
 
   serviceAccount:
     create: false
     name: ""
 
 
+# ──────────────────────────────────────────
+# Admin subchart values
+# ──────────────────────────────────────────
 admin:
   enabled: true
 
@@ -77,7 +81,7 @@ admin:
     targetPort: 3000
 
   ingress:
-    enabled: true
+    enabled: true        # ← required by ingress.yaml template
     className: "nginx"
     annotations: {}
     hosts:
@@ -102,7 +106,7 @@ admin:
     targetCPUUtilizationPercentage: 70
 
   env:
-    REACT_APP_API_URL: "http://app.example.com/api"
+    REACT_APP_API_URL: "http://backend.seang.shop"
 
   serviceAccount:
     create: false
@@ -177,10 +181,10 @@ database:
 
   auth:
     username: "appuser"
-    password: "changeme"
-    database: "appdb"
+    password: "changeme"                 # ⚠️ dev only — override with existingSecret in prod
+    database: "backend-db"              # must match global.database.name
     # Reference an existing secret instead of creating one:
-    existingSecret: ""
+    existingSecret: ""                  # empty = auto-create secret from password above
     secretKeys:
       userPasswordKey: postgres-password
 
@@ -226,12 +230,13 @@ keycloak:
     production: false                    # overridden to true in values-prod.yaml
     proxy: edge
     httpRelativePath: "/"
+    extraArgs: []                        # ← extra Keycloak startup args
 
   database:
     vendor: postgres
     host: "fullstack-app-database"       # same DB server as the rest of the app
     port: 5432
-    name: "keycloak"                     # separate DB from appdb
+    name: "keycloak"                     # separate DB from backend-db
     username: "keycloak"
     password: "changeme"                 # ⚠️ dev only — override with existingSecret in prod
     existingSecret: ""
@@ -241,6 +246,7 @@ keycloak:
   service:
     type: ClusterIP
     port: 80
+    httpsPort: 8443                      # ← required by service.yaml
 
   ingress:
     enabled: false                       # enabled per environment in values-dev/prod.yaml
@@ -271,6 +277,29 @@ keycloak:
     enabled: false
     minAvailable: 1
 
+  persistence:
+    enabled: false                       # ← required by deployment.yaml and pvc.yaml
+
+  serviceAccount:
+    create: false                        # ← required by serviceaccount.yaml
+    name: ""
+    automountServiceAccountToken: false  # ← required by serviceaccount.yaml
+
+  networkPolicy:
+    enabled: false                       # ← required by networkpolicy.yaml
+    allowExternal: true
+
+  podSecurityContext: {}                 # ← required by deployment.yaml
+  securityContext: {}                    # ← required by deployment.yaml
+  podAnnotations: {}                     # ← required by deployment.yaml
+  podLabels: {}                          # ← required by deployment.yaml
+  nodeSelector: {}                       # ← required by deployment.yaml
+  tolerations: []                        # ← required by deployment.yaml
+  topologySpreadConstraints: []          # ← required by deployment.yaml
+  initContainers: []                     # ← required by deployment.yaml
+  extraVolumeMounts: []                  # ← required by deployment.yaml
+  extraVolumes: []                       # ← required by deployment.yaml
+
   cache:
     stack: jdbc-ping
 
@@ -278,3 +307,5 @@ keycloak:
     enabled: false
     serviceMonitor:
       enabled: false
+      interval: 30s
+      scrapeTimeout: 10s                 # ← required by servicemonitor.yaml

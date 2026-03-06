@@ -45,17 +45,17 @@ spec:
           livenessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - {{ .Values.auth.username | quote }}
+                - sh
+                - -c
+                - pg_isready -U $POSTGRES_USER   # ← use env var instead of values
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
             exec:
               command:
-                - pg_isready
-                - -U
-                - {{ .Values.auth.username | quote }}
+                - sh
+                - -c
+                - pg_isready -U $POSTGRES_USER   # ← use env var instead of values
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:

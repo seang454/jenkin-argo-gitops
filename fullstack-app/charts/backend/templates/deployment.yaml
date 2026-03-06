@@ -56,12 +56,12 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-database-secret
+                  name: {{ .Values.global.database.existingSecret | default (printf "%s-database-secret" .Release.Name) }}
                   key: postgres-username
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-database-secret
+                  name: {{ .Values.global.database.existingSecret | default (printf "%s-database-secret" .Release.Name) }}
                   key: postgres-password
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

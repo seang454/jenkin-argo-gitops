@@ -38,9 +38,9 @@ Return true if we should create a new secret, false if using existing
 */}}
 {{- define "database.createSecret" -}}
 {{- if .Values.auth.existingSecret -}}
-  {{- false -}}
+  {{- false -}}  # ← this outputs the STRING "false"
 {{- else -}}
-  {{- true -}}
+  {{- true -}} # ← this outputs the STRING "true"
 {{- end -}}
 {{- end }}
 

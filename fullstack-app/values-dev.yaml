@@ -1,38 +1,55 @@
 # =============================================================================
 # Development Environment Overrides
-# Usage: helm install fullstack-app . -f values.yaml -f values-dev.yaml
+# Usage: helm install my-app ./fullstack-app -f values.yaml -f values-dev.yaml
 # =============================================================================
 
 # ── Global ─────────────────────────────────────────
 global:
   database:
     host: "fullstack-app-database"
-    name: "appdb_dev"
+    name: "appdb_dev"                    # must match database.auth.database below
+    existingSecret: ""                   # empty = auto-create secret from password below
 
 # ── Frontend ───────────────────────────────────────
 frontend:
   replicaCount: 1
   image:
-    tag: "dev"
+    tag: "979e84b"
   ingress:
     hosts:
-      - host: "dev.app.example.com"
+      - host: "frontend.seang.shop"
         paths:
           - path: /
             pathType: Prefix
   hpa:
     enabled: false
   env:
-    REACT_APP_API_URL: "http://dev.app.example.com/api"
+    REACT_APP_API_URL: "http://backend.seang.shop"
+
+# ── Admin ──────────────────────────────────────────
+admin:
+  replicaCount: 1
+  image:
+    tag: "b1e2ecc"
+  ingress:
+    hosts:
+      - host: "admin.seang.shop"
+        paths:
+          - path: /
+            pathType: Prefix
+  hpa:
+    enabled: false
+  env:
+    REACT_APP_API_URL: "http://backend.seang.shop"
 
 # ── Backend ────────────────────────────────────────
 backend:
   replicaCount: 1
   image:
-    tag: "dev"
+    tag: "63a7930"
   ingress:
     hosts:
-      - host: "dev.app.example.com"
+      - host: "backend.seang.shop"
         paths:
           - path: /api(/|$)(.*)
             pathType: Prefix
@@ -45,8 +62,9 @@ backend:
 # ── Database ───────────────────────────────────────
 database:
   auth:
-    password: "devpassword"
-    database: "appdb_dev"
+    password: "devpassword"              # Helm auto-creates secret from this
+    database: "appdb_dev"               # must match global.database.name
+    existingSecret: ""                   # empty = auto-create secret
   persistence:
     size: 2Gi
 
@@ -62,12 +80,14 @@ keycloak:
     hostnameStrictHttps: false
     auth:
       adminUser: admin
-      adminPassword: "changeme"            # plaintext OK in dev
+      adminPassword: "changeme"          # plaintext OK in dev
       existingSecret: ""
       existingSecretKey: "admin-password"
-    extraEnv:
-      - name: KC_LOG_LEVEL
-        value: "DEBUG"                     # verbose logging in dev
+    extraArgs: []
+
+  extraEnv:                              # ← correct location — read by deployment.yaml
+    - name: KC_LOG_LEVEL
+      value: "DEBUG"                     # verbose logging in dev
 
   database:
     vendor: postgres
@@ -75,7 +95,7 @@ keycloak:
     port: 5432
     name: "keycloak"
     username: "keycloak"
-    password: "changeme"                   # plaintext OK in dev
+    password: "changeme"                 # plaintext OK in dev
     existingSecret: ""
     existingSecretKey: "db-password"
 
@@ -84,11 +104,11 @@ keycloak:
     className: "nginx"
     annotations: {}
     hosts:
-      - host: "keycloak.dev.seang.shop"    # matches keycloak.hostname above
+      - host: "keycloak.dev.seang.shop"
         paths:
           - path: /
             pathType: Prefix
-    tls: []                                # no TLS in dev
+    tls: []                              # no TLS in dev
 
   resources:
     requests:
@@ -108,10 +128,12 @@ keycloak:
     httpGet:
       path: /health/started
       port: 9000
-    initialDelaySeconds: 15               # faster than default (30s)
+    initialDelaySeconds: 15             # faster startup for dev
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 20                  # less than default (30)
+    failureThreshold: 20
 
   metrics:
     enabled: false
+    serviceMonitor:
+      enabled: false

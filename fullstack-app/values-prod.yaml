@@ -7,7 +7,8 @@
 global:
   database:
     host: "fullstack-app-database"
-    name: "appdb_prod"
+    name: "appdb_prod"                          # must match database.auth.database below
+    existingSecret: "postgres-prod-secret"      # backend reads DB_USER and DB_PASSWORD from here
 
 # ── Frontend ───────────────────────────────────────
 frontend:
@@ -36,6 +37,34 @@ frontend:
       memory: 512Mi
   env:
     REACT_APP_API_URL: "https://frontend.seang.shop/api"
+
+# ── Admin ──────────────────────────────────────────
+admin:
+  replicaCount: 3
+  image:
+    tag: "stable"
+  ingress:
+    hosts:
+      - host: admin.seang.shop
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: admin-tls
+        hosts:
+          - admin.seang.shop
+  hpa:
+    minReplicas: 3
+    maxReplicas: 20
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    REACT_APP_API_URL: "https://backend.seang.shop"
 
 # ── Backend ────────────────────────────────────────
 backend:
@@ -69,8 +98,8 @@ backend:
 # ── Database ───────────────────────────────────────
 database:
   auth:
-    existingSecret: "postgres-prod-secret"
-    database: "appdb_prod"
+    existingSecret: "postgres-prod-secret"      # must match global.database.existingSecret
+    database: "appdb_prod"                      # must match global.database.name
   persistence:
     size: 50Gi
     storageClass: "premium-rwo"
@@ -87,17 +116,17 @@ keycloak:
     hostnameStrictHttps: true
     auth:
       adminUser: admin
-      adminPassword: ""                      # ignored — existingSecret is used
+      adminPassword: ""                          # ignored — existingSecret is used
       existingSecret: "keycloak-admin-secret"
       existingSecretKey: "admin-password"
 
   database:
     vendor: postgres
-    host: "fullstack-app-database"           # consistent with global.database.host
+    host: "fullstack-app-database"
     port: 5432
     name: "keycloak"
     username: "keycloak"
-    password: ""                             # ignored — existingSecret is used
+    password: ""                                # ignored — existingSecret is used
     existingSecret: "keycloak-db-secret"
     existingSecretKey: "db-password"
 
@@ -108,14 +137,14 @@ keycloak:
       cert-manager.io/cluster-issuer: "letsencrypt-prod"
       nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
     hosts:
-      - host: "keycloak.seang.shop"          # matches keycloak.hostname above
+      - host: "keycloak.seang.shop"
         paths:
           - path: /
             pathType: Prefix
     tls:
       - secretName: "keycloak-tls"
         hosts:
-          - "keycloak.seang.shop"            # matches keycloak.hostname above
+          - "keycloak.seang.shop"
 
   resources:
     requests:
@@ -143,6 +172,15 @@ keycloak:
               app.kubernetes.io/name: keycloak
           topologyKey: kubernetes.io/hostname
 
+  startupProbe:
+    httpGet:
+      path: /health/started
+      port: 9000
+    initialDelaySeconds: 30             # longer startup time for prod
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+
   cache:
     stack: jdbc-ping
 
@@ -151,3 +189,4 @@ keycloak:
     serviceMonitor:
       enabled: true
       interval: 30s
+      scrapeTimeout: 10s                # ← required by servicemonitor.yaml

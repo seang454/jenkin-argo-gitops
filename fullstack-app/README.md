@@ -85,7 +85,7 @@ helm install my-app ./fullstack-app \
 
 ### Install (prod)
 ```bash
-helm install my-app ./fullstack-app \
+helm install -app ./fullstack-app \
   -f ./fullstack-app/values-prod.yaml \
   --namespace prod --create-namespace
 ```
