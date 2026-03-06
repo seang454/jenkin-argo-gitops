@@ -16,6 +16,10 @@ spec:
       labels:
         {{- include "database.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.initContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: postgres
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -47,7 +51,7 @@ spec:
               command:
                 - sh
                 - -c
-                - pg_isready -U $POSTGRES_USER   # ← use env var instead of values
+                - pg_isready -U $POSTGRES_USER
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
@@ -55,7 +59,7 @@ spec:
               command:
                 - sh
                 - -c
-                - pg_isready -U $POSTGRES_USER   # ← use env var instead of values
+                - pg_isready -U $POSTGRES_USER
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
@@ -63,6 +67,10 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            {{- if .Values.initScript.enabled }}
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+            {{- end }}
       volumes:
         - name: postgres-data
           {{- if .Values.persistence.enabled }}
@@ -71,3 +79,8 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- if .Values.initScript.enabled }}
+        - name: init-script
+          configMap:
+            name: {{ include "database.fullname" . }}-init
+        {{- end }}

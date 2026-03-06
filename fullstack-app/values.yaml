@@ -61,6 +61,14 @@ frontend:
     create: false
     name: ""
 
+  initContainers:                        # wait for backend before starting
+    - name: wait-for-backend
+      image: busybox
+      command:
+        - sh
+        - -c
+        - until nc -z my-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
+
 
 # ──────────────────────────────────────────
 # Admin subchart values
@@ -111,6 +119,14 @@ admin:
   serviceAccount:
     create: false
     name: ""
+
+  initContainers:                        # wait for backend before starting
+    - name: wait-for-backend
+      image: busybox
+      command:
+        - sh
+        - -c
+        - until nc -z my-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
 
 # ──────────────────────────────────────────
 # Backend subchart values
@@ -164,6 +180,20 @@ backend:
     create: false
     name: ""
 
+  initContainers:                        # wait for database and keycloak before starting
+    - name: wait-for-database
+      image: busybox
+      command:
+        - sh
+        - -c
+        - until nc -z fullstack-app-database 5432; do echo "waiting for database..."; sleep 2; done
+    - name: wait-for-keycloak
+      image: busybox
+      command:
+        - sh
+        - -c
+        - until nc -z my-app-keycloak 80; do echo "waiting for keycloak..."; sleep 2; done
+
 # ──────────────────────────────────────────
 # Database subchart values
 # ──────────────────────────────────────────
@@ -202,6 +232,12 @@ database:
     limits:
       cpu: 500m
       memory: 512Mi
+
+  initScript:
+    enabled: true                        # creates keycloak user and database on first start
+    keycloakUser: "keycloak"            # must match keycloak.database.username
+    keycloakPassword: "changeme"        # must match keycloak.database.password
+    keycloakDatabase: "keycloak"        # must match keycloak.database.name
 
 # ──────────────────────────────────────────
 # Keycloak subchart values
@@ -289,16 +325,22 @@ keycloak:
     enabled: false                       # ← required by networkpolicy.yaml
     allowExternal: true
 
-  podSecurityContext: {}                 # ← required by deployment.yaml
-  securityContext: {}                    # ← required by deployment.yaml
-  podAnnotations: {}                     # ← required by deployment.yaml
-  podLabels: {}                          # ← required by deployment.yaml
-  nodeSelector: {}                       # ← required by deployment.yaml
-  tolerations: []                        # ← required by deployment.yaml
-  topologySpreadConstraints: []          # ← required by deployment.yaml
-  initContainers: []                     # ← required by deployment.yaml
-  extraVolumeMounts: []                  # ← required by deployment.yaml
-  extraVolumes: []                       # ← required by deployment.yaml
+  podSecurityContext: {}                 # set pod-level security (e.g. runAsUser, fsGroup)
+  securityContext: {}                    # set container-level security (e.g. readOnlyRootFilesystem)
+  podAnnotations: {}                     # add annotations to pods (e.g. prometheus.io/scrape: "true")
+  podLabels: {}                          # add extra labels to pods for grouping or routing
+  nodeSelector: {}                       # pin pods to specific nodes (e.g. disktype: ssd)
+  tolerations: []                        # allow pods to run on tainted/dedicated nodes
+  topologySpreadConstraints: []          # spread pods evenly across zones for high availability
+  initContainers:                        # run containers before main app starts
+    - name: wait-for-database
+      image: busybox
+      command:
+        - sh
+        - -c
+        - until nc -z fullstack-app-database 5432; do echo "waiting for database..."; sleep 2; done
+  extraVolumeMounts: []                  # mount extra volumes into the container (e.g. custom configs)
+  extraVolumes: []                       # define extra volumes to attach (e.g. configMaps, secrets)
 
   cache:
     stack: jdbc-ping
