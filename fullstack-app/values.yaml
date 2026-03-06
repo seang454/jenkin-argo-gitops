@@ -139,7 +139,7 @@ backend:
   image:
     repository: seang454/jenkins-itp-spring
     pullPolicy: IfNotPresent
-    tag: "63a7930"
+    tag: "3e2ae50"
 
   service:
     type: ClusterIP
