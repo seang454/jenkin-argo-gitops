@@ -32,7 +32,7 @@ frontend:
     maxReplicas: 20
   resources:
     requests:
-      cpu: 200m
+      cpu: 50m
       memory: 256Mi
     limits:
       cpu: 500m
@@ -62,7 +62,7 @@ admin:
     maxReplicas: 20
   resources:
     requests:
-      cpu: 200m
+      cpu: 50m
       memory: 256Mi
     limits:
       cpu: 500m
@@ -93,7 +93,7 @@ backend:
     maxReplicas: 20
   resources:
     requests:
-      cpu: 500m
+      cpu: 50m
       memory: 512Mi
     limits:
       cpu: "1"
@@ -160,29 +160,32 @@ keycloak:
 
   resources:
     requests:
-      cpu: "1"
-      memory: 2Gi
+      cpu: "100m"
+      memory: 512Mi
     limits:
-      cpu: "4"
-      memory: 4Gi
+      cpu: "1"
+      memory: 1Gi
 
   autoscaling:
-    enabled: true
+    enabled: false
     minReplicas: 3
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
 
   podDisruptionBudget:
-    enabled: true
+    enabled: false
     minAvailable: 2
+  # PodDisruptionBudget (PDB) is a rule that tells Kubernetes how many pods must stay running during planned disruptions.
 
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchLabels:
-              app.kubernetes.io/name: keycloak
-          topologyKey: kubernetes.io/hostname
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: keycloak
+            topologyKey: kubernetes.io/hostname
 
   livenessProbe:
     httpGet:

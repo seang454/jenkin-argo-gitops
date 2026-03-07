@@ -42,7 +42,7 @@ frontend:
 
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 128Mi
     limits:
       cpu: 250m
@@ -101,7 +101,7 @@ admin:
 
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 128Mi
     limits:
       cpu: 250m
@@ -160,7 +160,7 @@ backend:
 
   resources:
     requests:
-      cpu: 200m
+      cpu: 100m
       memory: 256Mi
     limits:
       cpu: 500m
@@ -297,7 +297,7 @@ keycloak:
 
   resources:
     requests:
-      cpu: 500m
+      cpu: 100m
       memory: 1Gi
     limits:
       cpu: "2"
