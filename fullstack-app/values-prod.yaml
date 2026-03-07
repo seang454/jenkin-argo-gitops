@@ -5,6 +5,8 @@
 
 # ── Global ─────────────────────────────────────────
 global:
+  certManager:
+    email: "pengseangsim210@gmail.com"
   database:
     host: "fullstack-app-database"
     name: "appdb_prod"                          # must match database.auth.database below
@@ -12,7 +14,7 @@ global:
 
 # ── Frontend ───────────────────────────────────────
 frontend:
-  replicaCount: 3
+  replicaCount: 1
   image:
     tag: "stable"
   ingress:
@@ -42,7 +44,7 @@ frontend:
 
 # ── Admin ──────────────────────────────────────────
 admin:
-  replicaCount: 3
+  replicaCount: 1
   image:
     tag: "stable"
   ingress:
@@ -72,7 +74,7 @@ admin:
 
 # ── Backend ────────────────────────────────────────
 backend:
-  replicaCount: 3
+  replicaCount: 1
   image:
     tag: "stable"
   ingress:
@@ -108,7 +110,7 @@ database:
     existingSecret: "postgres-prod-secret"      # must match global.database.existingSecret
     database: "appdb_prod"                      # must match global.database.name
   persistence:
-    size: 50Gi
+    size: 20Gi
     storageClass: "local-path"
   initScript:
     enabled: true
@@ -118,7 +120,7 @@ database:
 
 # ── Keycloak subchart ──────────────────────────────
 keycloak:
-  replicaCount: 3
+  replicaCount: 1
 
   keycloak:
     production: true
@@ -141,6 +143,13 @@ keycloak:
     password: ""                                # ignored — existingSecret is used
     existingSecret: "keycloak-db-secret"
     existingSecretKey: "db-password"
+
+  persistence:                    # ← ADD THIS BLOCK
+    enabled: true
+    storageClass: "local-path"
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
 
   ingress:
     enabled: true
@@ -190,30 +199,30 @@ keycloak:
   livenessProbe:
     httpGet:
       path: /health/live
-      port: 9000
-    initialDelaySeconds: 120            # longer for prod — not using --optimized
+      port: 8080
+    initialDelaySeconds: 180            # longer for prod — not using --optimized
     periodSeconds: 30
-    failureThreshold: 3
+    failureThreshold: 5
 
   readinessProbe:
     httpGet:
       path: /health/ready
-      port: 9000
-    initialDelaySeconds: 60             # longer for prod
+      port: 8080
+    initialDelaySeconds: 150             # longer for prod
     periodSeconds: 10
-    failureThreshold: 3
+    failureThreshold: 10
 
   startupProbe:
     httpGet:
       path: /health/started
-      port: 9000
-    initialDelaySeconds: 30
+      port: 8080
+    initialDelaySeconds: 120
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 30
+    failureThreshold: 60
 
   cache:
-    stack: jdbc-ping
+    stack: local
 
   metrics:
     enabled: true

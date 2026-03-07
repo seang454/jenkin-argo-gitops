@@ -1,6 +1,7 @@
 # Global values shared across all subcharts
 global:
-
+  certManager:
+    email: ""
   imageRegistry: ""
   imagePullSecrets: [] # Tells Kubernetes which secret to use to authenticate when pulling images from a private registry.
   storageClass: "" # Tells Kubernetes what type of disk to use for PersistentVolumeClaims across all subcharts.
@@ -61,14 +62,13 @@ frontend:
     create: false
     name: ""
 
-  initContainers:                        # wait for backend before starting
+  initContainers:                        # frontend/admin - fix backend name
     - name: wait-for-backend
       image: busybox
       command:
         - sh
         - -c
-        - until nc -z my-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
-
+        - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done  # ← fix from my-app-backend
 
 # ──────────────────────────────────────────
 # Admin subchart values
@@ -120,14 +120,13 @@ admin:
     create: false
     name: ""
 
-  initContainers:                        # wait for backend before starting
+  initContainers:                        # frontend/admin - fix backend name
     - name: wait-for-backend
       image: busybox
       command:
         - sh
         - -c
-        - until nc -z my-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
-
+        - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done  # ← fix from my-app-backend
 # ──────────────────────────────────────────
 # Backend subchart values
 # ──────────────────────────────────────────
@@ -179,8 +178,7 @@ backend:
   serviceAccount:
     create: false
     name: ""
-
-  initContainers:                        # wait for database and keycloak before starting
+  initContainers:                        # backend - fix keycloak name
     - name: wait-for-database
       image: busybox
       command:
@@ -192,8 +190,7 @@ backend:
       command:
         - sh
         - -c
-        - until nc -z my-app-keycloak 80; do echo "waiting for keycloak..."; sleep 2; done
-
+        - until nc -z fullstack-app-keycloak 80; do echo "waiting for keycloak..."; sleep 2; done  # ← fix from my-app-keycloak
 # ──────────────────────────────────────────
 # Database subchart values
 # ──────────────────────────────────────────
@@ -266,7 +263,10 @@ keycloak:
     production: false                    # overridden to true in values-prod.yaml
     proxy: edge
     httpRelativePath: "/"
-    extraArgs: []                        # ← extra Keycloak startup args
+    extraArgs:
+      - "--health-enabled=true"
+      - "--metrics-enabled=true"
+
 
   database:
     vendor: postgres
@@ -343,7 +343,7 @@ keycloak:
   extraVolumes: []                       # define extra volumes to attach (e.g. configMaps, secrets)
 
   cache:
-    stack: jdbc-ping
+    stack: local
 
   metrics:
     enabled: false
@@ -355,7 +355,7 @@ keycloak:
   livenessProbe:
     httpGet:
       path: /health/live
-      port: 9000
+      port: 8080
     initialDelaySeconds: 60
     periodSeconds: 30
     failureThreshold: 3
@@ -363,7 +363,16 @@ keycloak:
   readinessProbe:
     httpGet:
       path: /health/ready
-      port: 9000
+      port: 8080
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
+
+  startupProbe:                    # ← ADD THIS
+    httpGet:
+      path: /health/started
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30

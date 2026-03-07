@@ -26,4 +26,5 @@ data:
   KC_CACHE: {{ .Values.cache.stack | quote }}
   KC_HTTP_PORT: "8080"
   KC_HTTPS_PORT: "8443"
-  KC_MANAGEMENT_PORT: "9000"
+  KC_HTTP_MANAGEMENT_PORT: "9000"
+  KC_HTTP_MANAGEMENT_ENABLED: "true"    

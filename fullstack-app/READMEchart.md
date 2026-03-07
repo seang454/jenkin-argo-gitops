@@ -147,3 +147,6 @@ You must create it manually before deploying
 
 ```
 
+# Note
+- values.yaml        = defines ALL possible keys with default values
+- values-prod.yaml   = only changes specific keys that differ in production
