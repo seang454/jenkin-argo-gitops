@@ -45,3 +45,11 @@ Kubernetes calls GET /health/ready every 10s
 200 OK  → pod is ready ✅ send traffic to it
     ↓
 fails 3 times → pod not ready ❌ STOP sending traffic (but don't restart)
+
+
+helm install my-app ./fullstack-app \
+  -f ./fullstack-app/values.yaml \
+  -f ./fullstack-app/values-prod.yaml \
+  --set database.initScript.keycloakPassword="MyStr0ngPass!" \
+  --namespace prod \
+  --create-namespace

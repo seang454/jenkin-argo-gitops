@@ -109,7 +109,7 @@ database:
     database: "appdb_prod"                      # must match global.database.name
   persistence:
     size: 50Gi
-    storageClass: "premium-rwo"
+    storageClass: "local-path"
   initScript:
     enabled: true
     keycloakUser: "keycloak"
@@ -178,7 +178,7 @@ keycloak:
 
   affinity:
     podAntiAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
+      preferredDuringSchedulingIgnoredDuringExecution:
         - labelSelector:
             matchLabels:
               app.kubernetes.io/name: keycloak
