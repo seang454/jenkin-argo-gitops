@@ -19,7 +19,7 @@ frontend:
     tag: "stable"
   ingress:
     annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"  # ← auto issue TLS cert
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
     hosts:
       - host: frontend.seang.shop
         paths:
@@ -40,7 +40,7 @@ frontend:
       cpu: 500m
       memory: 512Mi
   env:
-    REACT_APP_API_URL: "https://backend.seang.shop"   # ← fixed: points to backend not itself
+    REACT_APP_API_URL: "https://backend.seang.shop"
 
 # ── Admin ──────────────────────────────────────────
 admin:
@@ -49,7 +49,7 @@ admin:
     tag: "stable"
   ingress:
     annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"  # ← auto issue TLS cert
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
     hosts:
       - host: admin.seang.shop
         paths:
@@ -79,7 +79,7 @@ backend:
     tag: "stable"
   ingress:
     annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"  # ← auto issue TLS cert
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
       nginx.ingress.kubernetes.io/rewrite-target: /$2
     hosts:
       - host: backend.seang.shop
@@ -107,8 +107,8 @@ backend:
 # ── Database ───────────────────────────────────────
 database:
   auth:
-    existingSecret: "postgres-prod-secret"      # must match global.database.existingSecret
-    database: "appdb_prod"                      # must match global.database.name
+    existingSecret: "postgres-prod-secret"
+    database: "appdb_prod"
   persistence:
     size: 20Gi
     storageClass: "local-path"
@@ -124,15 +124,20 @@ keycloak:
 
   keycloak:
     production: true
-    proxy: edge
-    hostname: "keycloak.seang.shop"
-    hostnameStrict: true
-    hostnameStrictHttps: true
+    hostname: "https://keycloak.seang.shop"     # ← full URL with https:// fixes iframe error
+    hostnameStrict: false                        # ← changed to false (strict + proxy = conflict)
     auth:
       adminUser: admin
-      adminPassword: ""                          # ignored — existingSecret is used
+      adminPassword: ""
       existingSecret: "keycloak-admin-secret"
       existingSecretKey: "admin-password"
+    extraArgs:
+      - "--health-enabled=true"
+      - "--metrics-enabled=true"
+      - "--http-enabled=true"
+      - "--hostname-backchannel-dynamic=true"   # ← fixes iframe/cookie origin detection
+      - "--proxy-headers=xforwarded"         # ← ADD THIS — fixes the warning + 504
+
 
   database:
     vendor: postgres
@@ -140,11 +145,11 @@ keycloak:
     port: 5432
     name: "keycloak"
     username: "keycloak"
-    password: ""                                # ignored — existingSecret is used
+    password: ""
     existingSecret: "keycloak-db-secret"
     existingSecretKey: "db-password"
 
-  persistence:                    # ← ADD THIS BLOCK
+  persistence:
     enabled: true
     storageClass: "local-path"
     accessModes:
@@ -157,6 +162,10 @@ keycloak:
     annotations:
       cert-manager.io/cluster-issuer: "letsencrypt-prod"
       nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+      nginx.ingress.kubernetes.io/proxy-cookie-path: "/ /"
+      nginx.ingress.kubernetes.io/proxy-cookie-domain: ".seang.shop"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"    # ← ADD
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"    # ← ADD
     hosts:
       - host: "keycloak.seang.shop"
         paths:
@@ -184,42 +193,33 @@ keycloak:
   podDisruptionBudget:
     enabled: false
     minAvailable: 2
-  # PodDisruptionBudget (PDB) is a rule that tells Kubernetes how many pods must stay running during planned disruptions.
 
   affinity: {}
-    # podAntiAffinity:
-    #   preferredDuringSchedulingIgnoredDuringExecution:
-    #     - weight: 100
-    #       podAffinityTerm:
-    #         labelSelector:
-    #           matchLabels:
-    #             app.kubernetes.io/name: keycloak
-    #         topologyKey: kubernetes.io/hostname
 
   livenessProbe:
     httpGet:
       path: /health/live
-      port: 8080
-    initialDelaySeconds: 180            # longer for prod — not using --optimized
+      port: 9000
+    initialDelaySeconds: 180
     periodSeconds: 30
     failureThreshold: 5
 
   readinessProbe:
     httpGet:
       path: /health/ready
-      port: 8080
-    initialDelaySeconds: 150             # longer for prod
+      port: 9000
+    initialDelaySeconds: 150
     periodSeconds: 10
     failureThreshold: 10
 
   startupProbe:
     httpGet:
       path: /health/started
-      port: 8080
+      port: 9000
     initialDelaySeconds: 120
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 60
+    failureThreshold: 120
 
   cache:
     stack: local

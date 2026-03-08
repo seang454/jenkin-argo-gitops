@@ -15,16 +15,14 @@ data:
   KC_DB_SCHEMA: {{ .Values.database.schema | quote }}
   {{- end }}
   KC_HTTP_RELATIVE_PATH: {{ .Values.keycloak.httpRelativePath | quote }}
-  KC_PROXY: {{ .Values.keycloak.proxy | quote }}
   {{- if .Values.keycloak.hostname }}
   KC_HOSTNAME: {{ .Values.keycloak.hostname | quote }}
   {{- end }}
-  KC_HOSTNAME_STRICT: {{ .Values.keycloak.hostnameStrict | quote }}
-  KC_HOSTNAME_STRICT_HTTPS: {{ .Values.keycloak.hostnameStrictHttps | quote }}
+  KC_HOSTNAME_STRICT: {{ .Values.keycloak.hostnameStrict | default "false" | quote }}
   KC_HEALTH_ENABLED: "true"
   KC_METRICS_ENABLED: {{ .Values.metrics.enabled | quote }}
   KC_CACHE: {{ .Values.cache.stack | quote }}
   KC_HTTP_PORT: "8080"
   KC_HTTPS_PORT: "8443"
   KC_HTTP_MANAGEMENT_PORT: "9000"
-  KC_HTTP_MANAGEMENT_ENABLED: "true"    
+  KC_HTTP_MANAGEMENT_ENABLED: "true"

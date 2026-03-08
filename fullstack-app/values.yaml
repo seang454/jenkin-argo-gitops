@@ -3,14 +3,13 @@ global:
   certManager:
     email: ""
   imageRegistry: ""
-  imagePullSecrets: [] # Tells Kubernetes which secret to use to authenticate when pulling images from a private registry.
-  storageClass: "" # Tells Kubernetes what type of disk to use for PersistentVolumeClaims across all subcharts.
-  # Database connection info shared with backend
+  imagePullSecrets: []
+  storageClass: ""
   database:
     host: "fullstack-app-database"
     port: 5432
     name: "backend-db"
-    existingSecret: ""  # empty = auto-create secret from password below
+    existingSecret: ""
 
 # ──────────────────────────────────────────
 # Frontend subchart values
@@ -31,7 +30,7 @@ frontend:
     targetPort: 3000
 
   ingress:
-    enabled: true        # ← required by ingress.yaml template
+    enabled: true
     className: "nginx"
     annotations: {}
     hosts:
@@ -62,13 +61,13 @@ frontend:
     create: false
     name: ""
 
-  initContainers:                        # frontend/admin - fix backend name
+  initContainers:
     - name: wait-for-backend
       image: busybox
       command:
         - sh
         - -c
-        - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done  # ← fix from my-app-backend
+        - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
 
 # ──────────────────────────────────────────
 # Admin subchart values
@@ -89,7 +88,7 @@ admin:
     targetPort: 3000
 
   ingress:
-    enabled: true        # ← required by ingress.yaml template
+    enabled: true
     className: "nginx"
     annotations: {}
     hosts:
@@ -120,13 +119,14 @@ admin:
     create: false
     name: ""
 
-  initContainers:                        # frontend/admin - fix backend name
+  initContainers:
     - name: wait-for-backend
       image: busybox
       command:
         - sh
         - -c
-        - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done  # ← fix from my-app-backend
+        - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
+
 # ──────────────────────────────────────────
 # Backend subchart values
 # ──────────────────────────────────────────
@@ -178,7 +178,8 @@ backend:
   serviceAccount:
     create: false
     name: ""
-  initContainers:                        # backend - fix keycloak name
+
+  initContainers:
     - name: wait-for-database
       image: busybox
       command:
@@ -190,7 +191,8 @@ backend:
       command:
         - sh
         - -c
-        - until nc -z fullstack-app-keycloak 80; do echo "waiting for keycloak..."; sleep 2; done  # ← fix from my-app-keycloak
+        - until nc -z fullstack-app-keycloak 80; do echo "waiting for keycloak..."; sleep 2; done
+
 # ──────────────────────────────────────────
 # Database subchart values
 # ──────────────────────────────────────────
@@ -208,10 +210,9 @@ database:
 
   auth:
     username: "appuser"
-    password: "changeme"                 # ⚠️ dev only — override with existingSecret in prod
-    database: "backend-db"              # must match global.database.name
-    # Reference an existing secret instead of creating one:
-    existingSecret: ""                  # empty = auto-create secret from password above
+    password: "changeme"                 # ⚠️ dev only
+    database: "backend-db"
+    existingSecret: ""
     secretKeys:
       userPasswordKey: postgres-password
 
@@ -231,14 +232,13 @@ database:
       memory: 512Mi
 
   initScript:
-    enabled: true                        # creates keycloak user and database on first start
-    keycloakUser: "keycloak"            # must match keycloak.database.username
-    keycloakPassword: "changeme"        # must match keycloak.database.password
-    keycloakDatabase: "keycloak"        # must match keycloak.database.name
+    enabled: true
+    keycloakUser: "keycloak"
+    keycloakPassword: "changeme"         # ⚠️ dev only
+    keycloakDatabase: "keycloak"
 
 # ──────────────────────────────────────────
 # Keycloak subchart values
-# All keys here map to charts/keycloak/values.yaml
 # ──────────────────────────────────────────
 keycloak:
   enabled: true
@@ -248,33 +248,33 @@ keycloak:
   image:
     repository: quay.io/keycloak/keycloak
     pullPolicy: IfNotPresent
-    tag: ""                              # defaults to appVersion in Chart.yaml
+    tag: "26.5.5"
 
   keycloak:
     auth:
       adminUser: admin
-      adminPassword: "changeme"          # ⚠️ dev only — override with existingSecret in prod
+      adminPassword: "changeme"          # ⚠️ dev only
       existingSecret: ""
       existingSecretKey: "admin-password"
 
-    hostname: ""                         # set per environment in values-dev/prod.yaml
-    hostnameStrict: false                # overridden to true in values-prod.yaml
-    hostnameStrictHttps: false           # overridden to true in values-prod.yaml
+    hostname: ""                         # set per environment
+    hostnameStrict: false
     production: false                    # overridden to true in values-prod.yaml
-    proxy: edge
     httpRelativePath: "/"
     extraArgs:
       - "--health-enabled=true"
       - "--metrics-enabled=true"
-
+      - "--http-enabled=true"            # ← required for KC 26
+      - "--proxy-headers=xforwarded"     # ← replaces KC_PROXY env var
+      - "--hostname-backchannel-dynamic=true"
 
   database:
     vendor: postgres
-    host: "fullstack-app-database"       # same DB server as the rest of the app
+    host: "fullstack-app-database"
     port: 5432
-    name: "keycloak"                     # separate DB from backend-db
+    name: "keycloak"
     username: "keycloak"
-    password: "changeme"                 # ⚠️ dev only — override with existingSecret in prod
+    password: "changeme"                 # ⚠️ dev only
     existingSecret: ""
     existingSecretKey: "db-password"
     schema: public
@@ -282,14 +282,14 @@ keycloak:
   service:
     type: ClusterIP
     port: 80
-    httpsPort: 8443                      # ← required by service.yaml
+    httpsPort: 8443
 
   ingress:
-    enabled: false                       # enabled per environment in values-dev/prod.yaml
+    enabled: false
     className: "nginx"
     annotations: {}
     hosts:
-      - host: ""                         # set per environment
+      - host: ""
         paths:
           - path: /
             pathType: Prefix
@@ -314,33 +314,35 @@ keycloak:
     minAvailable: 1
 
   persistence:
-    enabled: false                       # ← required by deployment.yaml and pvc.yaml
+    enabled: false
 
   serviceAccount:
-    create: false                        # ← required by serviceaccount.yaml
+    create: false
     name: ""
-    automountServiceAccountToken: false  # ← required by serviceaccount.yaml
+    automountServiceAccountToken: false
 
   networkPolicy:
-    enabled: false                       # ← required by networkpolicy.yaml
+    enabled: false
     allowExternal: true
 
-  podSecurityContext: {}                 # set pod-level security (e.g. runAsUser, fsGroup)
-  securityContext: {}                    # set container-level security (e.g. readOnlyRootFilesystem)
-  podAnnotations: {}                     # add annotations to pods (e.g. prometheus.io/scrape: "true")
-  podLabels: {}                          # add extra labels to pods for grouping or routing
-  nodeSelector: {}                       # pin pods to specific nodes (e.g. disktype: ssd)
-  tolerations: []                        # allow pods to run on tainted/dedicated nodes
-  topologySpreadConstraints: []          # spread pods evenly across zones for high availability
-  initContainers:                        # run containers before main app starts
+  podSecurityContext: {}
+  securityContext: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  topologySpreadConstraints: []
+
+  initContainers:
     - name: wait-for-database
       image: busybox
       command:
         - sh
         - -c
         - until nc -z fullstack-app-database 5432; do echo "waiting for database..."; sleep 2; done
-  extraVolumeMounts: []                  # mount extra volumes into the container (e.g. custom configs)
-  extraVolumes: []                       # define extra volumes to attach (e.g. configMaps, secrets)
+
+  extraVolumeMounts: []
+  extraVolumes: []
 
   cache:
     stack: local
@@ -350,12 +352,12 @@ keycloak:
     serviceMonitor:
       enabled: false
       interval: 30s
-      scrapeTimeout: 10s                 # ← required by servicemonitor.yaml
+      scrapeTimeout: 10s
 
   livenessProbe:
     httpGet:
       path: /health/live
-      port: 8080
+      port: 9000                         # ← KC 26 management port
     initialDelaySeconds: 60
     periodSeconds: 30
     failureThreshold: 3
@@ -363,15 +365,15 @@ keycloak:
   readinessProbe:
     httpGet:
       path: /health/ready
-      port: 8080
+      port: 9000                         # ← KC 26 management port
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
 
-  startupProbe:                    # ← ADD THIS
+  startupProbe:
     httpGet:
       path: /health/started
-      port: 8080
+      port: 9000                         # ← KC 26 management port
     initialDelaySeconds: 60
     periodSeconds: 10
     timeoutSeconds: 5
