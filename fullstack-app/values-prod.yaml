@@ -1,16 +1,58 @@
 # =============================================================================
 # Production Environment Overrides
-# Usage: helm install fullstack-app . -f values.yaml -f values-prod.yaml
+# ALL credentials pulled from HashiCorp Vault via AVP at sync time
+#
+# Vault paths:
+#   secret/prod/cloudflare   → token, zoneId
+#   secret/prod/database     → username, password, database
+#   secret/prod/keycloak     → admin-password, db-password, db-username
+#   secret/prod/certmanager  → email
 # =============================================================================
 
 # ── Global ─────────────────────────────────────────
 global:
   certManager:
-    email: "pengseangsim210@gmail.com"
+    email: <path:secret/data/prod/certmanager#email>
   database:
     host: "fullstack-app-database"
-    name: "appdb_prod"                          # must match database.auth.database below
-    existingSecret: "postgres-prod-secret"      # backend reads DB_USER and DB_PASSWORD from here
+    name: <path:secret/data/prod/database#database>
+    existingSecret: ""                   # disabled — AVP injects directly
+
+# ── Cloudflare ─────────────────────────────────────
+cloudflare:
+  secretName: "cloudflare-api-secret"
+  apiToken: <path:secret/data/prod/cloudflare#token>
+  zoneId: <path:secret/data/prod/cloudflare#zoneId>
+  records:
+    - name: "frontend.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+    - name: "admin.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+    - name: "backend.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+    - name: "keycloak.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+
+# ── cert-manager ───────────────────────────────────
+certManager:
+  enabled: true
+  issuerName: "letsencrypt-prod"
+  email: <path:secret/data/prod/certmanager#email>
+  acmeServer: "https://acme-v02.api.letsencrypt.org/directory"
+  dnsZones:
+    - "seang.shop"
 
 # ── Frontend ───────────────────────────────────────
 frontend:
@@ -107,47 +149,49 @@ backend:
 # ── Database ───────────────────────────────────────
 database:
   auth:
-    existingSecret: "postgres-prod-secret"
-    database: "appdb_prod"
+    username: <path:secret/data/prod/database#username>
+    password: <path:secret/data/prod/database#password>
+    database: <path:secret/data/prod/database#database>
+    existingSecret: ""                   # disabled — AVP injects directly
   persistence:
     size: 20Gi
     storageClass: "local-path"
   initScript:
     enabled: true
-    keycloakUser: "keycloak"
-    keycloakPassword: ""                        # ⚠️ must match password in keycloak-db-secret
+    keycloakUser: <path:secret/data/prod/keycloak#db-username>
+    keycloakPassword: <path:secret/data/prod/keycloak#db-password>
     keycloakDatabase: "keycloak"
 
-# ── Keycloak subchart ──────────────────────────────
+# ── Keycloak ───────────────────────────────────────
 keycloak:
   replicaCount: 1
 
   keycloak:
     production: true
-    hostname: "https://keycloak.seang.shop"     # ← full URL with https:// fixes iframe error
-    hostnameStrict: false                        # ← changed to false (strict + proxy = conflict)
+    hostname: "https://keycloak.seang.shop"
+    hostnameStrict: false
     auth:
-      adminUser: admin
-      adminPassword: ""
-      existingSecret: "keycloak-admin-secret"
+      adminUser: <path:secret/data/prod/keycloak#admin-username>
+      adminPassword: <path:secret/data/prod/keycloak#admin-password>
+      existingSecret: ""                 # disabled — AVP injects directly
       existingSecretKey: "admin-password"
     extraArgs:
       - "--health-enabled=true"
       - "--metrics-enabled=true"
       - "--http-enabled=true"
-      - "--hostname-backchannel-dynamic=true"   # ← fixes iframe/cookie origin detection
-      - "--proxy-headers=xforwarded"         # ← ADD THIS — fixes the warning + 504
-
+      - "--hostname-backchannel-dynamic=true"
+      - "--proxy-headers=xforwarded"
 
   database:
     vendor: postgres
     host: "fullstack-app-database"
     port: 5432
     name: "keycloak"
-    username: "keycloak"
-    password: ""
-    existingSecret: "keycloak-db-secret"
+    username: <path:secret/data/prod/keycloak#db-username>
+    password: <path:secret/data/prod/keycloak#db-password>
+    existingSecret: ""                   # disabled — AVP injects directly
     existingSecretKey: "db-password"
+    schema: public
 
   persistence:
     enabled: true
@@ -164,8 +208,8 @@ keycloak:
       nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
       nginx.ingress.kubernetes.io/proxy-cookie-path: "/ /"
       nginx.ingress.kubernetes.io/proxy-cookie-domain: ".seang.shop"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"    # ← ADD
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"    # ← ADD
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
     hosts:
       - host: "keycloak.seang.shop"
         paths:

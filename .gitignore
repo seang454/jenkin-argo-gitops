@@ -1,0 +1,7 @@
+# Never commit these
+argocd/avp/avp-credentials.yaml
+secrets-prod/
+secrets-dev/
+vault-setup.sh
+vault-init-keys.json
+*.secret.yaml

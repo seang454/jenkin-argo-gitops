@@ -1,14 +1,56 @@
 # =============================================================================
 # Development Environment Overrides
-# Usage: helm install my-app ./fullstack-app -f values.yaml -f values-dev.yaml
+# ALL credentials pulled from HashiCorp Vault via AVP at sync time
+#
+# Vault paths:
+#   secret/dev/cloudflare    → token, zoneId
+#   secret/dev/database      → username, password, database
+#   secret/dev/keycloak      → admin-username, admin-password, db-username, db-password
+#   secret/dev/certmanager   → email
 # =============================================================================
 
 # ── Global ─────────────────────────────────────────
 global:
   database:
     host: "fullstack-app-database"
-    name: "appdb_dev"                    # must match database.auth.database below
-    existingSecret: ""                   # empty = auto-create secret from password below
+    name: <path:secret/data/dev/database#database>
+    existingSecret: ""
+
+# ── Cloudflare ─────────────────────────────────────
+cloudflare:
+  secretName: "cloudflare-api-secret"
+  apiToken: <path:secret/data/dev/cloudflare#token>
+  zoneId: <path:secret/data/dev/cloudflare#zoneId>
+  records:
+    - name: "frontend.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+    - name: "admin.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+    - name: "backend.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+    - name: "keycloak.dev.seang.shop"
+      type: "A"
+      content: "34.22.93.174"
+      ttl: 1
+      proxied: true
+
+# ── cert-manager ───────────────────────────────────
+certManager:
+  enabled: true
+  issuerName: "letsencrypt-staging"      # staging = no rate limits in dev
+  email: <path:secret/data/dev/certmanager#email>
+  acmeServer: "https://acme-staging-v02.api.letsencrypt.org/directory"
+  dnsZones:
+    - "seang.shop"
 
 # ── Frontend ───────────────────────────────────────
 frontend:
@@ -62,13 +104,19 @@ backend:
 # ── Database ───────────────────────────────────────
 database:
   auth:
-    password: "devpassword"              # Helm auto-creates secret from this
-    database: "appdb_dev"               # must match global.database.name
-    existingSecret: ""                   # empty = auto-create secret
+    username: <path:secret/data/dev/database#username>
+    password: <path:secret/data/dev/database#password>
+    database: <path:secret/data/dev/database#database>
+    existingSecret: ""
   persistence:
     size: 2Gi
+  initScript:
+    enabled: true
+    keycloakUser: <path:secret/data/dev/keycloak#db-username>
+    keycloakPassword: <path:secret/data/dev/keycloak#db-password>
+    keycloakDatabase: "keycloak"
 
-# ── Keycloak subchart ──────────────────────────────
+# ── Keycloak ───────────────────────────────────────
 keycloak:
   replicaCount: 1
 
@@ -79,25 +127,26 @@ keycloak:
     hostnameStrict: false
     hostnameStrictHttps: false
     auth:
-      adminUser: admin
-      adminPassword: "changeme"          # plaintext OK in dev
+      adminUser: <path:secret/data/dev/keycloak#admin-username>
+      adminPassword: <path:secret/data/dev/keycloak#admin-password>
       existingSecret: ""
       existingSecretKey: "admin-password"
     extraArgs: []
 
-  extraEnv:                              # ← correct location — read by deployment.yaml
+  extraEnv:
     - name: KC_LOG_LEVEL
-      value: "DEBUG"                     # verbose logging in dev
+      value: "DEBUG"
 
   database:
     vendor: postgres
     host: "fullstack-app-database"
     port: 5432
     name: "keycloak"
-    username: "keycloak"
-    password: "changeme"                 # plaintext OK in dev
+    username: <path:secret/data/dev/keycloak#db-username>
+    password: <path:secret/data/dev/keycloak#db-password>
     existingSecret: ""
     existingSecretKey: "db-password"
+    schema: public
 
   ingress:
     enabled: true
@@ -108,7 +157,7 @@ keycloak:
         paths:
           - path: /
             pathType: Prefix
-    tls: []                              # no TLS in dev
+    tls: []
 
   resources:
     requests:
@@ -128,7 +177,7 @@ keycloak:
     httpGet:
       path: /health/started
       port: 9000
-    initialDelaySeconds: 15             # faster startup for dev
+    initialDelaySeconds: 15
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 20

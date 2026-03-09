@@ -1,34 +1,66 @@
-# Global values shared across all subcharts
+# =============================================================================
+# Base values.yaml
+#
+# This file contains SAFE DEFAULTS only.
+# - No real passwords
+# - No AVP placeholders  (those live in values-prod.yaml / values-dev.yaml)
+# - No sensitive data
+#
+# Layering order:
+#   values.yaml           ← this file  (base defaults)
+#   values-prod.yaml      ← prod overrides + AVP placeholders
+#   values-dev.yaml       ← dev overrides  + AVP placeholders
+# =============================================================================
+
+# ──────────────────────────────────────────
+# Global
+# ──────────────────────────────────────────
 global:
   certManager:
-    email: ""
+    email: ""                            # overridden per env via AVP
   imageRegistry: ""
   imagePullSecrets: []
   storageClass: ""
   database:
     host: "fullstack-app-database"
     port: 5432
-    name: "backend-db"
+    name: ""                             # overridden per env via AVP
     existingSecret: ""
 
 # ──────────────────────────────────────────
-# Frontend subchart values
+# Cloudflare DNS Hook
+# ──────────────────────────────────────────
+cloudflare:
+  secretName: "cloudflare-api-secret"
+  apiToken: ""                           # injected per env via AVP
+  zoneId: ""                             # injected per env via AVP
+  records: []                            # defined per env (different IPs/hosts)
+
+# ──────────────────────────────────────────
+# cert-manager
+# ──────────────────────────────────────────
+certManager:
+  enabled: true
+  issuerName: "letsencrypt-prod"
+  email: ""                              # injected per env via AVP
+  acmeServer: "https://acme-v02.api.letsencrypt.org/directory"
+  dnsZones:
+    - "seang.shop"
+
+# ──────────────────────────────────────────
+# Frontend
 # ──────────────────────────────────────────
 frontend:
   enabled: true
-
   replicaCount: 2
-
   image:
     repository: seang454/jenkins-itp-nextjs
     pullPolicy: IfNotPresent
     tag: "979e84b"
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 3000
-
   ingress:
     enabled: true
     className: "nginx"
@@ -39,7 +71,6 @@ frontend:
           - path: /
             pathType: Prefix
     tls: []
-
   resources:
     requests:
       cpu: 50m
@@ -47,20 +78,16 @@ frontend:
     limits:
       cpu: 250m
       memory: 256Mi
-
   hpa:
     enabled: true
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
-
   env:
     REACT_APP_API_URL: "http://backend.seang.shop"
-
   serviceAccount:
     create: false
     name: ""
-
   initContainers:
     - name: wait-for-backend
       image: busybox
@@ -70,23 +97,19 @@ frontend:
         - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
 
 # ──────────────────────────────────────────
-# Admin subchart values
+# Admin
 # ──────────────────────────────────────────
 admin:
   enabled: true
-
   replicaCount: 2
-
   image:
     repository: seang454/jenkins-admin-nextjs
     pullPolicy: IfNotPresent
     tag: "b1e2ecc"
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 3000
-
   ingress:
     enabled: true
     className: "nginx"
@@ -97,7 +120,6 @@ admin:
           - path: /
             pathType: Prefix
     tls: []
-
   resources:
     requests:
       cpu: 50m
@@ -105,20 +127,16 @@ admin:
     limits:
       cpu: 250m
       memory: 256Mi
-
   hpa:
     enabled: true
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
-
   env:
     REACT_APP_API_URL: "http://backend.seang.shop"
-
   serviceAccount:
     create: false
     name: ""
-
   initContainers:
     - name: wait-for-backend
       image: busybox
@@ -128,23 +146,19 @@ admin:
         - until nc -z fullstack-app-backend 8080; do echo "waiting for backend..."; sleep 2; done
 
 # ──────────────────────────────────────────
-# Backend subchart values
+# Backend
 # ──────────────────────────────────────────
 backend:
   enabled: true
-
   replicaCount: 2
-
   image:
     repository: seang454/jenkins-itp-spring
     pullPolicy: IfNotPresent
     tag: "3e2ae50"
-
   service:
     type: ClusterIP
     port: 8080
     targetPort: 8080
-
   ingress:
     enabled: true
     className: "nginx"
@@ -156,7 +170,6 @@ backend:
           - path: /api(/|$)(.*)
             pathType: Prefix
     tls: []
-
   resources:
     requests:
       cpu: 100m
@@ -164,21 +177,17 @@ backend:
     limits:
       cpu: 500m
       memory: 512Mi
-
   hpa:
     enabled: true
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
-
   env:
     NODE_ENV: "production"
     PORT: "8080"
-
   serviceAccount:
     create: false
     name: ""
-
   initContainers:
     - name: wait-for-database
       image: busybox
@@ -194,35 +203,30 @@ backend:
         - until nc -z fullstack-app-keycloak 80; do echo "waiting for keycloak..."; sleep 2; done
 
 # ──────────────────────────────────────────
-# Database subchart values
+# Database
 # ──────────────────────────────────────────
 database:
   enabled: true
-
   image:
     repository: postgres
     pullPolicy: IfNotPresent
     tag: "15-alpine"
-
   service:
     type: ClusterIP
     port: 5432
-
   auth:
-    username: "appuser"
-    password: "changeme"                 # ⚠️ dev only
-    database: "backend-db"
+    username: ""                         # injected per env via AVP
+    password: ""                         # injected per env via AVP
+    database: ""                         # injected per env via AVP
     existingSecret: ""
     secretKeys:
       userPasswordKey: postgres-password
-
   persistence:
     enabled: true
     storageClass: ""
     accessModes:
       - ReadWriteOnce
     size: 10Gi
-
   resources:
     requests:
       cpu: 250m
@@ -230,60 +234,52 @@ database:
     limits:
       cpu: 500m
       memory: 512Mi
-
   initScript:
     enabled: true
-    keycloakUser: "keycloak"
-    keycloakPassword: "changeme"         # ⚠️ dev only
+    keycloakUser: ""                     # injected per env via AVP
+    keycloakPassword: ""                 # injected per env via AVP
     keycloakDatabase: "keycloak"
 
 # ──────────────────────────────────────────
-# Keycloak subchart values
+# Keycloak
 # ──────────────────────────────────────────
 keycloak:
   enabled: true
-
   replicaCount: 1
-
   image:
     repository: quay.io/keycloak/keycloak
     pullPolicy: IfNotPresent
     tag: "26.5.5"
-
   keycloak:
     auth:
-      adminUser: admin
-      adminPassword: "changeme"          # ⚠️ dev only
+      adminUser: ""                      # injected per env via AVP
+      adminPassword: ""                  # injected per env via AVP
       existingSecret: ""
       existingSecretKey: "admin-password"
-
-    hostname: ""                         # set per environment
+    hostname: ""                         # set per env
     hostnameStrict: false
     production: false                    # overridden to true in values-prod.yaml
     httpRelativePath: "/"
     extraArgs:
       - "--health-enabled=true"
       - "--metrics-enabled=true"
-      - "--http-enabled=true"            # ← required for KC 26
-      - "--proxy-headers=xforwarded"     # ← replaces KC_PROXY env var
+      - "--http-enabled=true"
+      - "--proxy-headers=xforwarded"
       - "--hostname-backchannel-dynamic=true"
-
   database:
     vendor: postgres
     host: "fullstack-app-database"
     port: 5432
     name: "keycloak"
-    username: "keycloak"
-    password: "changeme"                 # ⚠️ dev only
+    username: ""                         # injected per env via AVP
+    password: ""                         # injected per env via AVP
     existingSecret: ""
     existingSecretKey: "db-password"
     schema: public
-
   service:
     type: ClusterIP
     port: 80
     httpsPort: 8443
-
   ingress:
     enabled: false
     className: "nginx"
@@ -294,7 +290,6 @@ keycloak:
           - path: /
             pathType: Prefix
     tls: []
-
   resources:
     requests:
       cpu: 100m
@@ -302,29 +297,23 @@ keycloak:
     limits:
       cpu: "2"
       memory: 2Gi
-
   autoscaling:
     enabled: false
     minReplicas: 1
     maxReplicas: 10
     targetCPUUtilizationPercentage: 80
-
   podDisruptionBudget:
     enabled: false
     minAvailable: 1
-
   persistence:
     enabled: false
-
   serviceAccount:
     create: false
     name: ""
     automountServiceAccountToken: false
-
   networkPolicy:
     enabled: false
     allowExternal: true
-
   podSecurityContext: {}
   securityContext: {}
   podAnnotations: {}
@@ -332,7 +321,6 @@ keycloak:
   nodeSelector: {}
   tolerations: []
   topologySpreadConstraints: []
-
   initContainers:
     - name: wait-for-database
       image: busybox
@@ -340,96 +328,35 @@ keycloak:
         - sh
         - -c
         - until nc -z fullstack-app-database 5432; do echo "waiting for database..."; sleep 2; done
-
   extraVolumeMounts: []
   extraVolumes: []
-
   cache:
     stack: local
-
   metrics:
     enabled: false
     serviceMonitor:
       enabled: false
       interval: 30s
       scrapeTimeout: 10s
-
   livenessProbe:
     httpGet:
       path: /health/live
-      port: 9000                         # ← KC 26 management port
+      port: 9000
     initialDelaySeconds: 60
     periodSeconds: 30
     failureThreshold: 3
-
   readinessProbe:
     httpGet:
       path: /health/ready
-      port: 9000                         # ← KC 26 management port
+      port: 9000
     initialDelaySeconds: 30
     periodSeconds: 10
     failureThreshold: 3
-
   startupProbe:
     httpGet:
       path: /health/started
-      port: 9000                         # ← KC 26 management port
+      port: 9000
     initialDelaySeconds: 60
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 30
-
-# ──────────────────────────────────────────
-# Cloudflare DNS Hook Configuration
-# ──────────────────────────────────────────
-cloudflare:
-  # Name of the Kubernetes Secret that stores Cloudflare credentials
-  secretName: "cloudflare-api-secret"
-
-  # apiToken: NEVER commit this value.
-  # Pass at deploy time: --set cloudflare.apiToken=<your-token>
-  # Get it from: Cloudflare Dashboard → My Profile → API Tokens → Create Token
-  # Required permission: Zone → DNS → Edit  for seang.shop
-  apiToken: ""
-
-  # zoneId: Cloudflare Dashboard → seang.shop → Overview → Zone ID (right sidebar)
-  # Pass at deploy time: --set cloudflare.zoneId=<your-zone-id>
-  zoneId: ""
-
-  # DNS records — one entry per Ingress host defined in your subcharts above.
-  # content: the external IP of your Nginx Ingress LoadBalancer.
-  # Find it with: kubectl get svc -n ingress-nginx
-  records:
-    - name: "frontend.seang.shop"
-      type: "A"
-      content: "1.2.3.4"               # ← replace with your LoadBalancer IP
-      ttl: 1                           # 1 = auto TTL in Cloudflare
-      proxied: true
-
-    - name: "admin.seang.shop"
-      type: "A"
-      content: "1.2.3.4"               # ← same LoadBalancer IP
-      ttl: 1
-      proxied: true
-
-    - name: "backend.seang.shop"
-      type: "A"
-      content: "1.2.3.4"               # ← same LoadBalancer IP
-      ttl: 1
-      proxied: true
-
-# ──────────────────────────────────────────
-# cert-manager ClusterIssuer Configuration
-# ──────────────────────────────────────────
-certManager:
-  enabled: true
-  issuerName: "letsencrypt-prod"
-  # email: your Let's Encrypt registration email
-  # Pass at deploy time: --set certManager.email=your@email.com
-  # Or set global.certManager.email above
-  email: ""
-  acmeServer: "https://acme-v02.api.letsencrypt.org/directory"
-  # Use staging for testing to avoid Let's Encrypt rate limits:
-  # acmeServer: "https://acme-staging-v02.api.letsencrypt.org/directory"
-  dnsZones:
-    - "seang.shop"

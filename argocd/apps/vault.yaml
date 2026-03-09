@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://helm.releases.hashicorp.com
+    targetRevision: "0.28.1"
+    chart: vault
+    helm:
+      values: |
+        server:
+          dev:
+            enabled: false          # production mode
+          ha:
+            enabled: false          # single instance (enable for prod HA)
+          dataStorage:
+            enabled: true
+            size: 10Gi
+          auditStorage:
+            enabled: true
+            size: 10Gi
+          readinessProbe:
+            enabled: true
+            path: /v1/sys/health?standbyok=true
+          livenessProbe:
+            enabled: true
+            path: /v1/sys/health?standbyok=true
+            initialDelaySeconds: 60
+          ui:
+            enabled: true           # enable Vault UI
+            serviceType: ClusterIP
+
+        injector:
+          enabled: false            # we use AVP instead of sidecar injector
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
