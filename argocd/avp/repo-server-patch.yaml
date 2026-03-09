@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: true
+      volumes:
+        - name: var-files
+          emptyDir: {}
+        - name: plugins
+          emptyDir: {}
+        - name: cmp-plugin
+          configMap:
+            name: cmp-plugin
+      initContainers:
+        - name: download-avp
+          image: alpine:3.18
+          command: [sh, -c]
+          args:
+            - |
+              wget -O /plugins/argocd-vault-plugin \
+                https://github.com/argoproj-labs/argocd-vault-plugin/releases/download/v1.18.1/argocd-vault-plugin_1.18.1_linux_amd64 && \
+              chmod +x /plugins/argocd-vault-plugin
+          volumeMounts:
+            - mountPath: /plugins
+              name: plugins
+      containers:
+        - name: avp-helm
+          image: quay.io/argoproj/argocd:v2.14.5
+          command: [/var/run/argocd/argocd-cmp-server]
+          envFrom:
+            - secretRef:
+                name: argocd-vault-plugin-credentials
+          volumeMounts:
+            - mountPath: /var/run/argocd
+              name: var-files
+            - mountPath: /home/argocd/cmp-server/plugins
+              name: plugins
+            - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+              name: cmp-plugin
+              subPath: plugin.yaml
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
