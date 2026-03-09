@@ -42,3 +42,29 @@ data:
 # /usr/local/bin/argocd-vault-plugin
 
 # HELM_VALUES_FILES is an environment variable that you set yourself in the ArgoCD Application manifest. (apps)
+# ArgoCD sees plugin: argocd-vault-plugin-helm
+#         │
+#         ▼
+# Runs INIT:
+#   helm dependency build
+#         │
+#         ▼
+# Runs GENERATE:
+#   helm template myapp .
+#     -f values.yaml
+#     -f values-prod.yaml        ← your HELM_VALUES_FILES
+#         │
+#         ▼
+# Output contains placeholders:
+#   password: <path:secret/data/prod/keycloak#admin-password>
+#         │
+#         ▼
+# argocd-vault-plugin generate
+#   fetches real value from Vault
+#         │
+#         ▼
+# Final output:
+#   password: MyStr0ngAdminPass!   ← real secret injected ✅
+#         │
+#         ▼
+# Applied to Kubernetes

@@ -1,3 +1,4 @@
+# ArgoCD reads this file → pulls Vault Helm chart → deploys Vault to your cluster
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
