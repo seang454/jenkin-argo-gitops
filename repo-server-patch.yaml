@@ -1,3 +1,6 @@
+---
+# argocd/avp/repo-server-patch.yaml
+# Patches argocd-repo-server to inject AVP sidecar (required for ArgoCD v2.4+)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,6 +34,9 @@ spec:
         - name: avp-helm
           image: quay.io/argoproj/argocd:v2.14.5
           command: [/var/run/argocd/argocd-cmp-server]
+          env:
+            - name: PATH
+              value: /home/argocd/cmp-server/plugins:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
           envFrom:
             - secretRef:
                 name: argocd-vault-plugin-credentials

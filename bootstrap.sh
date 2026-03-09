@@ -55,12 +55,16 @@ if [ "$1" == "teardown" ]; then
   kubectl delete secret argocd-vault-plugin-credentials -n argocd --ignore-not-found
   echo -e "${GREEN}✓ AVP secret deleted${NC}"
 
+  # ── Remove cmp-plugin ConfigMap ──────────────────────
+  echo ""
+  echo "=== Removing cmp-plugin ConfigMap ==="
+  kubectl delete configmap cmp-plugin -n argocd --ignore-not-found
+  echo -e "${GREEN}✓ cmp-plugin ConfigMap deleted${NC}"
+
   # ── Reset argocd-cm to EMPTY (NEVER delete it) ───────
-  # ArgoCD server REQUIRES argocd-cm to exist at all times
-  # Deleting it causes CrashLoopBackOff → bootstrap hangs forever
   echo ""
   echo "=== Resetting argocd-cm to empty (keeping it alive) ==="
-  kubectl apply -f - <<EOF
+  kubectl apply -f - <<HEREDOC
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -70,7 +74,7 @@ metadata:
     app.kubernetes.io/name: argocd-cm
     app.kubernetes.io/part-of: argocd
 data: {}
-EOF
+HEREDOC
   echo -e "${GREEN}✓ argocd-cm reset to empty — ArgoCD stays healthy${NC}"
 
   # ── Remove Vault namespace + PVCs ───────────────────
@@ -146,26 +150,59 @@ kubectl patch storageclass local-path \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
 echo -e "${GREEN}✓ StorageClass local-path set as default${NC}"
 
-# ── Step 1: AVP credentials + argocd-cm ─────────────
+# ── Step 1: AVP credentials + cmp-plugin ConfigMap ──
 echo ""
-echo "=== Step 1: Applying AVP credentials and plugin config ==="
+echo "=== Step 1: Applying AVP credentials and cmp-plugin ConfigMap ==="
 kubectl apply -f argocd/avp/avp-credentials.yaml
 echo -e "${GREEN}✓ AVP credentials applied${NC}"
 
 kubectl apply -f argocd/avp/argocd-cm-plugin.yaml
-echo -e "${GREEN}✓ argocd-cm plugin config applied${NC}"
+echo -e "${GREEN}✓ cmp-plugin ConfigMap applied${NC}"
+
+# ── Step 2: Patch repo-server with AVP sidecar ──────
+echo ""
+echo ""
+echo "=== Step 2: Patching repo-server with AVP sidecar ==="
+# NOTE: repo-server-patch.yaml lives in repo ROOT, not argocd/avp/
+# ArgoCD would try to apply it as a full Deployment which fails without selector
+if [ ! -f "repo-server-patch.yaml" ]; then
+  echo -e "${RED}❌ repo-server-patch.yaml not found in repo root!${NC}"
+  exit 1
+fi
+kubectl patch deployment argocd-repo-server -n argocd \
+  --patch-file repo-server-patch.yaml
+echo -e "${GREEN}✓ repo-server patched with AVP sidecar${NC}"
 
 echo ""
-echo "=== Restarting ArgoCD to pick up plugin ==="
-kubectl rollout restart deployment argocd-server -n argocd
-kubectl rollout restart deployment argocd-repo-server -n argocd
-kubectl rollout status deployment argocd-server -n argocd
+echo "=== Waiting for repo-server to restart with AVP sidecar ==="
 kubectl rollout status deployment argocd-repo-server -n argocd
-echo -e "${GREEN}✓ ArgoCD restarted${NC}"
+echo -e "${GREEN}✓ repo-server restarted${NC}"
 
-# ── Step 2: Root app ─────────────────────────────────
+# ── Verify sidecar is present ────────────────────────
 echo ""
-echo "=== Step 2: Applying root-app ==="
+echo "=== Verifying AVP sidecar ==="
+echo -e "${YELLOW}⏳ Waiting for new repo-server pod to be Ready...${NC}"
+kubectl wait pod -n argocd \
+  -l app.kubernetes.io/name=argocd-repo-server \
+  --for=condition=Ready \
+  --timeout=120s
+
+CONTAINERS=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server \
+  --field-selector=status.phase=Running \
+  -o jsonpath='{.items[0].spec.containers[*].name}')
+echo ""
+echo "  Containers in repo-server: $CONTAINERS"
+if echo "$CONTAINERS" | grep -q "avp-helm"; then
+  echo -e "${GREEN}✓ AVP sidecar confirmed${NC}"
+else
+  echo -e "${RED}❌ AVP sidecar NOT found — check repo-server logs${NC}"
+  kubectl describe pod -n argocd -l app.kubernetes.io/name=argocd-repo-server | tail -20
+  exit 1
+fi
+
+# ── Step 3: Root app ─────────────────────────────────
+echo ""
+echo "=== Step 3: Applying root-app ==="
 kubectl apply -f argocd/root-app.yaml
 echo -e "${GREEN}✓ root-app created${NC}"
 echo ""
@@ -174,9 +211,9 @@ echo "  wave 0 → Vault"
 echo "  wave 1 → argocd-vault-plugin"
 echo "  wave 2 → fullstack-app-prod + fullstack-app-dev"
 
-# ── Step 3: Wait for Vault ───────────────────────────
+# ── Step 4: Wait for Vault ───────────────────────────
 echo ""
-echo "=== Step 3: Waiting for Vault pod to be Running ==="
+echo "=== Step 4: Waiting for Vault pod to be Running ==="
 echo -e "${YELLOW}⏳ This may take a few minutes...${NC}"
 until kubectl get pod vault-0 -n vault 2>/dev/null | grep -q "Running"; do
   echo "  Waiting for vault-0..."
@@ -184,16 +221,16 @@ until kubectl get pod vault-0 -n vault 2>/dev/null | grep -q "Running"; do
 done
 echo -e "${GREEN}✓ Vault pod is Running${NC}"
 
-# ── Step 4: Vault setup ──────────────────────────────
+# ── Step 5: Vault setup ──────────────────────────────
 echo ""
-echo "=== Step 4: Running Vault setup ==="
+echo "=== Step 5: Running Vault setup ==="
 chmod +x vault-setup.sh
 ./vault-setup.sh
 echo -e "${GREEN}✓ Vault setup complete${NC}"
 
-# ── Step 5: Verify ───────────────────────────────────
+# ── Step 6: Verify ───────────────────────────────────
 echo ""
-echo "=== Step 5: Verifying all applications ==="
+echo "=== Step 6: Verifying all applications ==="
 sleep 10
 kubectl get applications -n argocd
 
@@ -207,7 +244,8 @@ echo "  1. Store vault-init-keys.json in a password manager"
 echo "  2. Delete it:          rm vault-init-keys.json"
 echo "  3. Delete bootstrap:   rm bootstrap.sh"
 echo "  4. Delete vault setup: rm vault-setup.sh"
-echo "verify can path have data"
+echo ""
+echo "=== Verifying Vault paths have data ==="
 for path in \
   secret/prod/cloudflare \
   secret/prod/database \
