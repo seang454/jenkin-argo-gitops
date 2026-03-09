@@ -1,7 +1,7 @@
----
+
 # Registers argocd-vault-plugin-helm as a custom plugin in ArgoCD
 # Place this in: argocd/avp/argocd-cm-plugin.yaml
----
+# argocd/avp/argocd-cm-plugin.yaml
 # argocd/avp/argocd-cm-plugin.yaml
 apiVersion: v1
 kind: ConfigMap
@@ -23,12 +23,12 @@ data:
         command: [sh, -c]
         args:
           - |
-            helm dependency build
+            helm dependency build 1>&2
             VALUES_ARGS=""
             if [ -n "$HELM_VALUES_FILES" ]; then
               VALUES_ARGS=$(echo "$HELM_VALUES_FILES" | tr ',' '\n' | sed 's/^/-f /' | tr '\n' ' ')
             fi
-            helm template $ARGOCD_APP_NAME . $VALUES_ARGS | argocd-vault-plugin generate -
+            helm template $ARGOCD_APP_NAME . $VALUES_ARGS 2>/dev/null | argocd-vault-plugin generate -
       lockRepo: false
 
 # Where (argocd-vault-plugin) It Comes  From 
