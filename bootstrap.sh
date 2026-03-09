@@ -181,15 +181,24 @@ echo -e "${GREEN}✓ repo-server restarted${NC}"
 # ── Verify sidecar is present ────────────────────────
 echo ""
 echo "=== Verifying AVP sidecar ==="
-echo -e "${YELLOW}⏳ Waiting for new repo-server pod to be Ready...${NC}"
+echo -e "${YELLOW}⏳ Waiting for repo-server rollout to complete...${NC}"
+
+# Wait for rollout to finish (handles old pods terminating)
+kubectl rollout status deployment argocd-repo-server -n argocd --timeout=120s
+
+# Then wait for the new pod to be Ready
 kubectl wait pod -n argocd \
   -l app.kubernetes.io/name=argocd-repo-server \
   --for=condition=Ready \
-  --timeout=120s
+  --timeout=120s \
+  --field-selector=status.phase=Running 2>/dev/null || true
+
+# Give it a moment to fully settle
+sleep 5
 
 CONTAINERS=$(kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server \
   --field-selector=status.phase=Running \
-  -o jsonpath='{.items[0].spec.containers[*].name}')
+  -o jsonpath='{.items[0].spec.containers[*].name}' 2>/dev/null)
 echo ""
 echo "  Containers in repo-server: $CONTAINERS"
 if echo "$CONTAINERS" | grep -q "avp-helm"; then
