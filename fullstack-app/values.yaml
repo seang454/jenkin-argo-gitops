@@ -378,3 +378,58 @@ keycloak:
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 30
+
+# ──────────────────────────────────────────
+# Cloudflare DNS Hook Configuration
+# ──────────────────────────────────────────
+cloudflare:
+  # Name of the Kubernetes Secret that stores Cloudflare credentials
+  secretName: "cloudflare-api-secret"
+
+  # apiToken: NEVER commit this value.
+  # Pass at deploy time: --set cloudflare.apiToken=<your-token>
+  # Get it from: Cloudflare Dashboard → My Profile → API Tokens → Create Token
+  # Required permission: Zone → DNS → Edit  for seang.shop
+  apiToken: ""
+
+  # zoneId: Cloudflare Dashboard → seang.shop → Overview → Zone ID (right sidebar)
+  # Pass at deploy time: --set cloudflare.zoneId=<your-zone-id>
+  zoneId: ""
+
+  # DNS records — one entry per Ingress host defined in your subcharts above.
+  # content: the external IP of your Nginx Ingress LoadBalancer.
+  # Find it with: kubectl get svc -n ingress-nginx
+  records:
+    - name: "frontend.seang.shop"
+      type: "A"
+      content: "1.2.3.4"               # ← replace with your LoadBalancer IP
+      ttl: 1                           # 1 = auto TTL in Cloudflare
+      proxied: true
+
+    - name: "admin.seang.shop"
+      type: "A"
+      content: "1.2.3.4"               # ← same LoadBalancer IP
+      ttl: 1
+      proxied: true
+
+    - name: "backend.seang.shop"
+      type: "A"
+      content: "1.2.3.4"               # ← same LoadBalancer IP
+      ttl: 1
+      proxied: true
+
+# ──────────────────────────────────────────
+# cert-manager ClusterIssuer Configuration
+# ──────────────────────────────────────────
+certManager:
+  enabled: true
+  issuerName: "letsencrypt-prod"
+  # email: your Let's Encrypt registration email
+  # Pass at deploy time: --set certManager.email=your@email.com
+  # Or set global.certManager.email above
+  email: ""
+  acmeServer: "https://acme-v02.api.letsencrypt.org/directory"
+  # Use staging for testing to avoid Let's Encrypt rate limits:
+  # acmeServer: "https://acme-staging-v02.api.letsencrypt.org/directory"
+  dnsZones:
+    - "seang.shop"

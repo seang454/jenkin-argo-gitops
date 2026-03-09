@@ -1,0 +1,154 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-cloudflare-dns
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+  annotations:
+    # pre-install,pre-upgrade: runs BEFORE subcharts are applied
+    # so all Ingress hosts already have DNS records when cert-manager
+    # attempts the DNS01 challenge
+    "helm.sh/hook": pre-install,pre-upgrade
+    # weight 5: runs after cloudflare-secret.yaml (weight 0)
+    "helm.sh/hook-weight": "5"
+    # hook-succeeded:    delete job when it succeeds (keeps cluster clean)
+    # before-hook-creation: delete any leftover job before re-running on upgrade
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  # Retry up to 2 times on failure
+  backoffLimit: 2
+  # Hard timeout: 5 minutes total (DNS creation + propagation wait)
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      name: {{ .Release.Name }}-cloudflare-dns
+      labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: cloudflare-dns
+          image: curlimages/curl:latest
+          env:
+            - name: CF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cloudflare.secretName }}
+                  key: token
+            - name: ZONE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cloudflare.secretName }}
+                  key: zoneId
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+
+              echo "========================================="
+              echo " Cloudflare DNS Hook"
+              echo " Release  : {{ .Release.Name }}"
+              echo " Namespace: {{ .Release.Namespace }}"
+              echo " Zone     : seang.shop"
+              echo "========================================="
+
+              {{- range .Values.cloudflare.records }}
+              echo ""
+              echo "-----------------------------------------"
+              echo " Record : {{ .name }}"
+              echo " Type   : {{ .type }}"
+              echo " Content: {{ .content }}"
+              echo " Proxied: {{ .proxied }}"
+              echo "-----------------------------------------"
+
+              # Check if a record with this name already exists
+              EXISTING=$(curl -s -X GET \
+                "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type={{ .type }}&name={{ .name }}" \
+                -H "Authorization: Bearer $CF_TOKEN" \
+                -H "Content-Type: application/json")
+
+              RECORD_ID=$(echo "$EXISTING" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
+
+              if [ -n "$RECORD_ID" ]; then
+                # ── UPDATE existing record ──────────────────
+                echo "Record exists (id: $RECORD_ID) — updating..."
+                RESPONSE=$(curl -s -X PUT \
+                  "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
+                  -H "Authorization: Bearer $CF_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  --data '{
+                    "type":    "{{ .type }}",
+                    "name":    "{{ .name }}",
+                    "content": "{{ .content }}",
+                    "ttl":     {{ .ttl     | default 1 }},
+                    "proxied": {{ .proxied | default true }}
+                  }')
+              else
+                # ── CREATE new record ───────────────────────
+                echo "No existing record found — creating..."
+                RESPONSE=$(curl -s -X POST \
+                  "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+                  -H "Authorization: Bearer $CF_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  --data '{
+                    "type":    "{{ .type }}",
+                    "name":    "{{ .name }}",
+                    "content": "{{ .content }}",
+                    "ttl":     {{ .ttl     | default 1 }},
+                    "proxied": {{ .proxied | default true }}
+                  }')
+              fi
+
+              # Validate Cloudflare API response
+              SUCCESS=$(echo "$RESPONSE" | grep -o '"success":[^,}]*' | cut -d: -f2 | tr -d ' ')
+              if [ "$SUCCESS" = "true" ]; then
+                echo "✓ {{ .name }} → applied successfully"
+              else
+                echo "✗ Failed to apply {{ .name }}"
+                echo "  Response: $RESPONSE"
+                exit 1
+              fi
+              {{- end }}
+
+              # ── DNS Propagation Check ────────────────────────────────────────
+              # Poll Cloudflare's own resolver (1.1.1.1) for the first record.
+              # All 3 records point to the same IP so checking one is sufficient.
+              # Max wait: 18 attempts × 10 s = 3 minutes.
+              echo ""
+              echo "========================================="
+              echo " All records submitted."
+              echo " Checking propagation via 1.1.1.1 ..."
+              echo "========================================="
+
+              PRIMARY="{{ (index .Values.cloudflare.records 0).name }}"
+              ATTEMPTS=0
+              MAX=18
+
+              while [ $ATTEMPTS -lt $MAX ]; do
+                ATTEMPTS=$((ATTEMPTS + 1))
+                echo "Attempt $ATTEMPTS/$MAX — resolving $PRIMARY ..."
+
+                # nslookup exits 0 even on NXDOMAIN; grep for a real answer
+                RESOLVED=$(nslookup "$PRIMARY" 1.1.1.1 2>/dev/null || true)
+                if echo "$RESOLVED" | grep -qiE 'Address.*[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
+                  echo "✓ DNS propagated for $PRIMARY"
+                  break
+                fi
+
+                if [ $ATTEMPTS -eq $MAX ]; then
+                  echo "⚠ Propagation check timed out after $(( MAX * 10 ))s."
+                  echo "  Ingress resources will still be applied."
+                  echo "  cert-manager will retry DNS01 challenges automatically."
+                fi
+
+                sleep 10
+              done
+
+              echo ""
+              echo "✓ Cloudflare DNS hook complete."
+              echo "  Safe to apply Ingress resources."
