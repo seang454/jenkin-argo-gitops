@@ -25,3 +25,20 @@ data:
             helm template $ARGOCD_APP_NAME . \
               $(echo $HELM_VALUES_FILES | tr ',' '\n' | sed 's/^/-f /') \
               | argocd-vault-plugin generate -
+
+# Where (argocd-vault-plugin) It Comes  From 
+# it is from
+# argocd-vault-plugin.yaml (in argocd/apps/)
+#         │
+#         ▼
+# ArgoCD installs this as a Helm chart
+#         │
+#         ▼
+# Downloads AVP binary from GitHub releases
+# https://github.com/argoproj-labs/argocd-vault-plugin
+#         │
+#         ▼
+# Copies binary into argocd-repo-server pod at:
+# /usr/local/bin/argocd-vault-plugin
+
+# HELM_VALUES_FILES is an environment variable that you set yourself in the ArgoCD Application manifest. (apps)

@@ -5,6 +5,8 @@ metadata:
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
+    # ↑ when you DELETE this app, ArgoCD also deletes
+    #   all the Kubernetes resources it created
   annotations:
     # sync-wave 2: runs AFTER vault (wave 0) and AVP (wave 1)
     argocd.argoproj.io/sync-wave: "2"
