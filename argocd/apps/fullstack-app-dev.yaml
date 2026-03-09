@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/seang454/jenkin-argo-gitops
-    targetRevision: dev           # dev syncs from dev branch
+    targetRevision: master
     path: fullstack-app
     plugin:
       name: argocd-vault-plugin-helm
